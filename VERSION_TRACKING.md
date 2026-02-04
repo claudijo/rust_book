@@ -285,30 +285,112 @@ This document tracks which content came from which Bevy version.
 
 ---
 
-## Bevy 0.4 - 0.18
+## Bevy 0.4 (December 19, 2020)
+
+**Source**: https://bevyengine.org/news/bevy-0-4/
+
+**Status**: ✅ Complete - All major features integrated
+
+### New Chapters Added
+
+1. **States** - App state management with lifecycle events
+2. **Reflection** - Rewrote Properties chapter with new bevy_reflect system
+
+### Major Updates to Existing Chapters
+
+1. **Bevy ECS** - Massive improvements
+   - Flexible system parameters (any order, 25% faster compiles)
+   - Separated query filters (clearer syntax)
+   - System inputs/outputs and chaining
+   - Deprecated for-each systems
+   - Commands changed to &mut Commands
+
+2. **Web Support** - WebGL2 rendering backend, full 2D/3D in browser
+
+3. **Reflection** - Complete rewrite from Properties to Reflect system
+
+### Key Features
+
+**ECS Improvements:**
+- Flexible parameters: any order works!
+- Query filters: `Query<(&T, &V), (With<A>, Without<B>)>`
+- System I/O: error handling chains, data pipelines
+- Deprecated for-each systems (use queries)
+- 25% faster compile times
+
+**States System:**
+- App state management as enums
+- Lifecycle events: on_enter, on_update, on_exit
+- State transitions
+- Common patterns (menu, loading, gameplay)
+
+**Web Platform:**
+- WebGL2 render backend
+- Full 2D and 3D rendering in browser
+- Showcase website
+
+**Reflection:**
+- Replaced bevy_property with bevy_reflect
+- Field access by name
+- Path-based nested access
+- Trait reflection
+- Auto serialization
+
+**Schedule V2:**
+- Stage trait for custom stages
+- SystemStage (parallel/serial/custom)
+- Nested schedules
+- Run criteria
+- Fixed timestep
+
+**Renderer Optimization:**
+- 10x+ performance improvements
+- Incrementalized rendering
+- Shared buffers for text
+- Mailbox vsync
+
+**Developer Experience:**
+- Cross-platform #[bevy_main] macro
+- Live shader reloading
+- Dynamic linking (fast iteration)
+- Logging with tracing
+- Profiling (chrome://tracing)
+- HIDPI support
+
+**Other Features:**
+- GLTF camera import
+- 3D texture assets
+- Spawn scenes as children
+- Text layout improvements (glyph_brush_layout)
+- Timer improvements
+- Task system optimization
+- Apple Silicon support
+
+### Breaking Changes
+
+- For-each systems removed (use queries)
+- Query filter syntax changed
+- Commands: `&mut Commands` not `Commands`
+- Properties → Reflection (new API)
+- Timer API changed
+- XComponents → XBundle rename
+- Time API changed to getters
+
+---
+
+## Bevy 0.5 - 0.18
 
 **Status**: ⏳ Awaiting input
 
 Will be added when release notes are provided.
 
-### Integration Plan
-
-When new versions are added:
-1. Read complete release notes
-2. Identify new features
-3. Identify changed features
-4. Identify deprecated features
-5. Update existing chapters with changes
-6. Add new chapters for new major features
-7. Document version in this file
-8. Keep structure lean (avoid over-fragmentation)
-
 ---
 
 ## Version History Summary
 
-- **Bevy 0.1**: Foundation complete (14 chapters, ~6,100 words)
-- **Bevy 0.2**: Integrated (18 chapters, ~9,000+ words, 4 new, 9 updated)
-- **Bevy 0.3**: Integrated (20 chapters, ~13,000+ words, 2 new, 8 major updates)
-- **Bevy 0.4+**: Pending
+- **Bevy 0.1**: Foundation (14 chapters, ~6,100 words)
+- **Bevy 0.2**: Integrated (18 chapters, ~9,000 words, 4 new, 9 updated)
+- **Bevy 0.3**: Integrated (20 chapters, ~13,000 words, 2 new, 8 major updates)
+- **Bevy 0.4**: Integrated (21 chapters, ~16,000 words, 2 new, 3 major updates)
+- **Bevy 0.5+**: Pending
 

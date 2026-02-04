@@ -65,11 +65,30 @@ Bevy ECS does both of these things about as well as it can. According to the pop
 
 ### For Each Systems
 
-"For each systems" run once on each entity containing the given components:
+**Deprecated in Bevy 0.4**
+
+"For each systems" were available in Bevy 0.1-0.3 and ran once for each entity:
 
 ```rust
+// Bevy 0.1-0.3 only (deprecated in 0.4)
 fn system(position: Mut<Position>, velocity: &Velocity) {
-    // do something
+    // ran once per entity
+}
+```
+
+**Why were they removed?**
+1. Fundamentally limited - couldn't filter, use multiple queries, or iterate removed components
+2. Forced design decisions - "one way to do things" is better
+3. Common "gotchas" for newcomers (e.g., `&mut T` vs `Mut<T>` confusion)
+4. Increased compile times (~5 seconds saved by removing)
+5. Complex macro implementation
+
+**Use Query Systems Instead (Bevy 0.4+):**
+```rust
+fn system(query: Query<(&mut Position, &Velocity)>) {
+    for (mut position, velocity) in query.iter_mut() {
+        // per-entity logic here
+    }
 }
 ```
 
@@ -320,13 +339,37 @@ fn system() {
 
 ### With/Without Filters
 
-Only runs on entities With or Without a given component:
+**Bevy 0.1-0.3 (confusing nested syntax):**
+```rust
+// Filters were intermingled with components
+fn system(query: Query<With<A, Without<B, (&Transform, Changed<Velocity>)>>>) {
+    // Hard to tell what's a filter vs what's a component!
+}
+```
+
+**Bevy 0.4+ (separated filters):**
+```rust
+// Query filters are now separate from components
+fn system(query: Query<(&Transform, &Velocity), (With<A>, Without<B>, Changed<Velocity>)>) {
+    // Much clearer! Second tuple is filters only
+}
+
+// Query without filters
+fn system(query: Query<(&Transform, &Velocity)>) {
+    // Clean and simple
+}
+```
+
+Benefits of the new syntax:
+- Clearer what the query returns vs what it filters on
+- Can filter on `Changed<Velocity>` without retrieving Velocity
+- Can create type aliases for reusable filters:
 
 ```rust
-fn system(mut query: Query<Without<Parent, &Position>>) {
-    for position in &mut query.iter() {
-        // do something
-    }
+type MovingEntities = (With<A>, Without<B>, Changed<Velocity>);
+
+fn system(query: Query<(&Transform, &Velocity), MovingEntities>) {
+    // Reusable filter!
 }
 ```
 
@@ -372,6 +415,82 @@ fn system(mut commands: Commands, time: Res<Time>, mut query: Query<&Position>) 
     // do something
 }
 ```
+
+**Bevy 0.4 Changes:**
+
+Commands changed from `mut commands: Commands` to `commands: &mut Commands`:
+
+```rust
+fn system(commands: &mut Commands, time: Res<Time>) {
+    commands.spawn((Position(0.0), Velocity(1.0)));
+}
+```
+
+## Flexible System Parameters
+
+**Added in Bevy 0.4**
+
+Prior to 0.4, system parameters had to be in a specific order ([Commands][Resources][Queries]), which was confusing and error-prone.
+
+**Bevy 0.1-0.3 (required order):**
+```rust
+// This compiled
+fn valid(commands: &mut Commands, time: Res<Time>, query: Query<&Transform>) {}
+
+// This failed to compile!
+fn invalid(query: Query<&Transform>, commands: &mut Commands, time: Res<Time>) {}
+```
+
+**Bevy 0.4+ (any order works!):**
+```rust
+// All of these work now!
+fn system1(query: Query<&Transform>, commands: &mut Commands, time: Res<Time>) {}
+fn system2(time: Res<Time>, query: Query<&Transform>, commands: &mut Commands) {}
+fn system3(commands: &mut Commands, query: Query<&Transform>, time: Res<Time>) {}
+```
+
+This was achieved by completely rewriting system generation using a new `SystemParam` trait. Benefits:
+- **~25% faster clean compile times**
+- **Any parameter order works**
+- **Easy to add new parameters** - just implement SystemParam
+- **Simpler implementation** - much easier to maintain
+
+## System Inputs, Outputs, and Chaining
+
+**Added in Bevy 0.4**
+
+Systems can now have inputs and outputs, enabling powerful patterns like error handling:
+
+```rust
+fn main() {
+    App::build()
+        .add_system(result_system.system().chain(error_handler.system()))
+        .run();
+}
+
+fn result_system(query: Query<&Transform>) -> Result<(), MyError> {
+    let transform = query.get(SOME_ENTITY)?;
+    println!("found transform: {:?}", transform);
+    Ok(())
+}
+
+fn error_handler(In(result): In<Result<(), MyError>>) {
+    if let Err(err) = result {
+        println!("Error: {:?}", err);
+    }
+}
+```
+
+The System trait signature:
+```rust
+System<In = (), Out = ()>        // No inputs or outputs
+System<In = usize, Out = f32>    // Takes usize, returns f32
+```
+
+This enables:
+- Error handling chains
+- Data pipelines between systems
+- Composable system logic
 
 ## How Function Systems Work
 

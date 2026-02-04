@@ -1,17 +1,55 @@
 # Web Platform Support
 
-**Added in Bevy 0.2**
+**Added in Bevy 0.2, Expanded in Bevy 0.4**
 
-A subset of Bevy now runs on the web using WebAssembly (WASM)!
+Bevy now runs on the web with full rendering support!
 
-## What Works
+## Bevy 0.2: Initial Support
 
-Specifically, Bevy apps can:
-- Run Bevy ECS schedules
-- React to input events
-- Create an empty canvas (using winit)
-- Use single-threaded task scheduling
-- **Load assets (added in 0.3)** - via HTTP fetch() requests
+Initial WASM support provided:
+- Bevy ECS schedules
+- Input events
+- Canvas creation
+- Single-threaded task scheduling
+
+## Bevy 0.4: WebGL2 Rendering
+
+**Added in Bevy 0.4**
+
+Bevy now has a complete WebGL2 render backend! You can run Bevy games in the browser with full 2D and 3D rendering.
+
+### What Works
+
+- ✅ ECS schedules
+- ✅ Input events (keyboard, mouse, touch)
+- ✅ **2D and 3D rendering** (WebGL2)
+- ✅ Asset loading via HTTP
+- ✅ UI rendering
+- ✅ Text rendering
+- ✅ Sprite rendering
+- ✅ PBR materials
+
+### Current Limitations
+
+- ⚠️ Multi-threading limited (single-threaded task scheduler)
+- ⚠️ Audio support limited
+
+## Running Bevy on Web
+
+Check out the Bevy WebGL2 Showcase website which demonstrates various Bevy examples and games running in the browser.
+
+### Building for Web
+
+```bash
+# Add WASM target
+rustup target add wasm32-unknown-unknown
+
+# Build your game for web
+cargo build --target wasm32-unknown-unknown --release
+
+# Serve and test locally
+# (use a tool like basic-http-server or python -m http.server)
+```
 
 ### WASM Asset Loading
 

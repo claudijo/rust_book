@@ -18,12 +18,13 @@
 # Core Systems
 
 - [Scenes](./scenes.md)
-- [Properties](./properties.md)
+- [Reflection](./properties.md)
 - [Events](./events.md)
 - [Assets](./assets.md)
 - [Sound](./sound.md)
 - [Input](./input.md)
 - [Task System](./task-system.md)
+- [States](./states.md)
 
 # Rendering
 
