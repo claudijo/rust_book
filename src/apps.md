@@ -51,3 +51,27 @@ All engine and game logic is built using plugins. You can create your own plugin
 
 Bevy's philosophy: **use only what you need, replace what you don't like**. You are free to add/remove plugins based on your project's unique needs. Most people will stick to `add_default_plugins()` for simplicity, at least initially.
 
+## Bevy 0.2 Improvements
+
+### Startup Stage Control
+
+**Added in Bevy 0.2**
+
+AppBuilder now has `add_startup_stage_before()` and `add_startup_stage_after()` methods for better control over startup system execution order:
+
+```rust
+fn main() {
+    App::build()
+        .add_default_plugins()
+        .add_startup_stage_before("startup", "pre_startup")
+        .add_startup_system_to_stage("pre_startup", early_setup.system())
+        .run();
+}
+```
+
+### System Initialization
+
+**Fixed in Bevy 0.2**
+
+App.schedule systems are now properly initialized when running the app, ensuring all systems are ready before the first frame.
+

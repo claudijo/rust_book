@@ -201,3 +201,32 @@ fn system(_button: &Button, interaction: Mutated<Interaction>) {
 }
 ```
 
+## Bevy 0.2 Improvements
+
+**Changes in Bevy 0.2:**
+
+### Multiline Text Support
+
+The `DrawableText` component now supports multiline text rendering.
+
+### Default Node Size
+
+The default node size changed from `Undefined` to `Auto` to match the Stretch implementation. This provides more intuitive default behavior.
+
+### Component Bundle Cloning
+
+UI component bundles now derive `Clone`, making it easier to reuse UI configurations:
+
+```rust
+let button_bundle = ButtonComponents {
+    // ... configuration
+};
+
+// Can now clone the bundle
+commands.spawn(button_bundle.clone());
+```
+
+### Font Atlas Improvements
+
+Fixed font atlas overflow issues that could occur with certain font sizes and character sets.
+

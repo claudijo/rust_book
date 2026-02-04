@@ -143,6 +143,35 @@ fn system(mut wall_query: Query<&Wall>, mut player_query: Query<&Player>) {
 }
 ```
 
+### Parallel Queries
+
+**Added in Bevy 0.2**
+
+Queries can now be iterated in parallel to distribute work across multiple threads:
+
+```rust
+fn system(pool: Res<ComputeTaskPool>, mut query: Query<&mut Transform>) {
+    query.iter().par_iter(32).for_each(&pool, |mut transform| {
+      transform.translate(Vec3::new(1.0, 0.0, 0.0));
+    });
+}
+```
+
+This breaks the query up into 32 "batches" and runs each batch as a different task in the bevy task system.
+
+### Or Queries
+
+**Added in Bevy 0.2**
+
+Support for Or in ECS queries allows matching entities that have any of the specified components:
+
+```rust
+// Matches entities with either ComponentA or ComponentB
+fn system(query: Query<Or<&ComponentA, &ComponentB>>) {
+    // ...
+}
+```
+
 ### Entity Queries and Direct Component Access
 
 ```rust
@@ -270,6 +299,28 @@ fn main() {
 
 The `.system()` call takes the function pointer and converts it to a `Box<dyn System>`. This works because Bevy implements the `IntoQuerySystem` trait for all functions that match a certain set of function signatures.
 
+## Performance Improvements in Bevy 0.2
+
+**Added in Bevy 0.2**
+
+Several significant performance improvements were made to Bevy ECS:
+
+### Generational Entity IDs
+
+Entity IDs changed from random UUIDs to incrementing generational indices. Random UUIDs were nice because they could be created anywhere, were unique across game runs, and could be safely persisted to files or reused across networks. However, they ended up being too slow relative to the alternatives. The randomness had a measurable cost and entity locations had to be looked up using a hash map.
+
+By moving to generational indices (using the hecs implementation), entity ids can be directly used as array indices, which makes entity location lookups lightning fast.
+
+### Read-Only Queries
+
+Read-only traits were implemented for queries that don't mutate anything. This allows guaranteeing that a query won't mutate anything, enabling further optimizations.
+
+### Removed Locking from World APIs
+
+This gives a significant speed boost. This can be done safely due to a combination of the new read-only queries and changing World mutation APIs to be a mutable World borrow.
+
+As a result of these optimizations, direct component lookup is much faster.
+
 ## Built on Hecs
 
 Bevy ECS uses a heavily forked version of the minimalist Hecs ECS. Hecs is an efficient single-threaded archetypal ECS that provides the core World, Archetype, and internal Query data structures. Bevy ECS adds on top:
@@ -280,5 +331,5 @@ Bevy ECS uses a heavily forked version of the minimalist Hecs ECS. Hecs is an ef
 - **Optimization**: By modifying internal data access patterns, Bevy improved performance significantly.
 - **Query Wrappers**: Bevy's Query provides safe, scoped access to the World in a multi-threaded context with improved ergonomics.
 - **Change Detection**: Automatically and efficiently tracks component add/remove/update operations.
-- **Stable Entity IDs**: Almost every ECS uses unstable entity ids that cannot be used for serialization or networking. In Bevy ECS, entity ids are globally unique and stable.
+- **Entity IDs**: In Bevy 0.1, entity ids were globally unique UUIDs suitable for serialization. In Bevy 0.2, this changed to generational indices for better performance, using direct array indexing for lookups.
 

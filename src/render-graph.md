@@ -99,3 +99,23 @@ let shader_stages = ShaderStages {
 let pipeline_handle = pipelines.add(PipelineDescriptor::default_config(shader_stages));
 ```
 
+## Bevy 0.2 Improvements
+
+### Render Resources Tracking
+
+**Fixed in Bevy 0.2**
+
+Properly track added and removed RenderResources in RenderResourcesNode. This fixes issues where entities vanished or changed color when new entities were spawned/despawned.
+
+### iOS Shader Compilation
+
+**Added in Bevy 0.2**
+
+iOS now uses shaderc-rs for GLSL to SPIR-V compilation, improving shader support on Apple platforms.
+
+### Render Feature Flag
+
+**Added in Bevy 0.2**
+
+Added a `render` feature flag, which makes the entire render pipeline optional. This is useful for headless servers or when building tools that don't need rendering.
+

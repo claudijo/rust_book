@@ -22,3 +22,11 @@ fn system(asset_server: Res<AssetServer>, audio_output: Res<AudioOutput>) {
 
 We plan on extending the audio system with more control and features in the future.
 
+## Bevy 0.2 Improvements
+
+### Custom Rodio Source
+
+**Added in Bevy 0.2**
+
+Custom rodio source for audio support was added. `AudioOutput` is now able to play anything that implements the `Decodable` trait, providing much more flexibility in audio formats and sources.
+

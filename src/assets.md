@@ -87,6 +87,29 @@ asset_server.watch_for_changes().unwrap();
 
 This will load new versions of assets whenever their files have changed.
 
+**Bevy 0.2 improvements:**
+- Fixed deadlock in hot asset reloading
+- Fixed hot asset reloading on Windows
+- Fixed missing asset info path for synchronous loading
+
+## Asset Path Loading
+
+**Added in Bevy 0.2**
+
+Assets are now loaded from the root path when loading directly, and the system checks for asset path existence before attempting to load.
+
+## Asset Modification Events
+
+**Added in Bevy 0.2**
+
+An `AssetEvent` is now sent when modifying assets using `get_id_mut` (renamed to `get_with_id_mut` in 0.2):
+
+```rust
+// Bevy 0.2
+let handle = assets.get_with_id_mut(id);
+// This now triggers an AssetEvent
+```
+
 ## Adding New Asset Types
 
 To add a new asset type, implement the AssetLoader trait. This tells Bevy what file formats to look for and how to translate the file bytes into the given asset type.

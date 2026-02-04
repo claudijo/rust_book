@@ -49,3 +49,15 @@ Get nice smooth edges by using Multi-Sample Anti-Aliasing:
 app.add_resource(Msaa { samples: 8 })
 ```
 
+## Bevy 0.2 Improvements
+
+### Binary GLTF Support
+
+**Added in Bevy 0.2**
+
+Support for binary glTF (.glb) format was added.
+
+### GLTF Loading Improvements
+
+GLTFs can now be loaded that don't have UVs and normals, making the loader more flexible for various model types.
+

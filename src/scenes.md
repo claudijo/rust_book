@@ -82,3 +82,23 @@ Changes to Scene files can be automatically applied to spawned Scenes at runtime
 
 Scenes are built on top of Bevy's Property and Asset systems. Components can be used in scenes provided they derive the Properties trait. Properties are what enable scene serialization, deserialization, and patching changes at runtime.
 
+## Bevy 0.2 Improvements
+
+### Scene Unloading
+
+**Added in Bevy 0.2**
+
+Methods `unload()` and `unload_sync()` were added on SceneSpawner for unloading scenes:
+
+```rust
+fn system(mut scene_spawner: ResMut<SceneSpawner>, scene_handle: Handle<Scene>) {
+    // Unload a scene asynchronously
+    scene_spawner.unload(scene_handle);
+    
+    // Or unload synchronously
+    scene_spawner.unload_sync(scene_handle);
+}
+```
+
+This allows for proper cleanup and memory management when scenes are no longer needed.
+

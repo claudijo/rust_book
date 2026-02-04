@@ -41,3 +41,18 @@ for sprite_handle in sprite_handles.iter() {
 let texture_atlas = texture_atlas_builder.finish(&mut textures).unwrap();
 ```
 
+## Bevy 0.2 Improvements
+
+### Sprite Resize Mode
+
+`SpriteResizeMode` allows choosing how sprite resizing should be handled. Automatic by default.
+
+```rust
+// Control how sprites resize
+sprite.resize_mode = SpriteResizeMode::Manual;
+```
+
+### Fixed Sprite Clipping
+
+Transparent sprites no longer clip incorrectly at the same depth. Sprites at the same depth now render properly.
+

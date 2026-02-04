@@ -12,6 +12,7 @@
 
 - [2D Features](./2d-features.md)
 - [3D Features](./3d-features.md)
+- [Transforms](./transforms.md)
 
 # Core Systems
 
@@ -20,10 +21,16 @@
 - [Events](./events.md)
 - [Assets](./assets.md)
 - [Sound](./sound.md)
+- [Input](./input.md)
+- [Task System](./task-system.md)
 
 # Rendering
 
 - [Render Graph](./render-graph.md)
+
+# Platforms
+
+- [Web Platform Support](./web-support.md)
 
 # Development
 

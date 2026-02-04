@@ -187,7 +187,33 @@ This document tracks which content came from which Bevy version.
 
 ---
 
-## Bevy 0.2 - 0.18
+## Bevy 0.2 (September 19, 2020)
+
+**Source**: https://bevyengine.org/news/bevy-0-2/
+
+**Status**: ✅ Complete - All content integrated
+
+### New Chapters Added
+
+1. **Task System** - Custom async task system, CPU improvements, context-specific pools
+2. **Web Platform Support** - Initial WASM support, limitations noted
+3. **Transforms** - Complete rewrite from separate components to unified Transform
+4. **Input** - Gamepad support, new iterator methods
+
+### Major Updates to Existing Chapters
+
+1. **Bevy ECS** - Parallel queries, Or queries, performance improvements (generational IDs, read-only queries, removed locking)
+2. **Assets** - Hot reloading fixes, asset events, path checking
+3. **Bevy UI** - Multiline text, default size change, cloning support
+4. **2D/3D Features** - Sprite resize mode, GLTF improvements
+5. **Sound** - Custom rodio source, Decodable support
+6. **Scenes** - Unload methods
+7. **Render Graph** - Resource tracking fixes, iOS improvements
+8. **Bevy Apps** - Startup stage control
+
+---
+
+## Bevy 0.3 - 0.18
 
 **Status**: ⏳ Awaiting input
 
@@ -209,6 +235,7 @@ When new versions are added:
 
 ## Version History Summary
 
-- **Bevy 0.1**: Foundation complete (14 chapters, ~5,650 words)
-- **Bevy 0.2+**: Pending
+- **Bevy 0.1**: Foundation complete (14 chapters, ~6,100 words)
+- **Bevy 0.2**: Integrated (18 chapters, ~9,000+ words, 4 new, 9 updated)
+- **Bevy 0.3+**: Pending
 
