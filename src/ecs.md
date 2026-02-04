@@ -77,6 +77,7 @@ fn system(position: Mut<Position>, velocity: &Velocity) {
 
 Query systems give you control over iteration:
 
+**Bevy 0.1-0.2:**
 ```rust
 fn system(mut query: Query<(&Position, &mut Velocity)>) {
     for (position, mut velocity) in &mut query.iter() {
@@ -84,6 +85,18 @@ fn system(mut query: Query<(&Position, &mut Velocity)>) {
     }
 }
 ```
+
+**Bevy 0.3+ (improved ergonomics):**
+```rust
+fn system(mut query: Query<(&Position, &mut Velocity)>) {
+    // query.iter() is now a real iterator! No more &mut required
+    for (position, mut velocity) in query.iter() {
+        // sweet ergonomic bliss
+    }
+}
+```
+
+The 0.3 improvement removed the awkward `&mut` from iteration and made `query.iter()` return an actual iterator instead of a wrapper type.
 
 ### Change Detection
 
@@ -159,6 +172,64 @@ fn system(pool: Res<ComputeTaskPool>, mut query: Query<&mut Transform>) {
 
 This breaks the query up into 32 "batches" and runs each batch as a different task in the bevy task system.
 
+### QuerySets and 100% Lockless ECS
+
+**Added in Bevy 0.3**
+
+Bevy ECS became completely lock-free in version 0.3. Previously, locks were needed to prevent unsafe access when systems had conflicting queries like this:
+
+```rust
+// This would have been unsafe without locks
+fn conflicting_query_system(mut q0: Query<&mut A>, mut q1: Query<(&mut A, &B)>) {
+    let a = q0.get_mut(some_entity).unwrap();
+    let (another_a, b) = q1.get_mut(some_entity).unwrap();
+    // Aaah!!! Two mutable references to the same component!
+}
+```
+
+In Bevy 0.3, systems with conflicting queries fail when the schedule is constructed. For cases where conflicting queries are needed, **QuerySets** were added:
+
+```rust
+fn system(mut queries: QuerySet<(Query<&mut A>, Query<(&mut A, &B)>)>) {
+    for a in queries.q0_mut().iter_mut() {
+        // Access first query
+    }
+
+    for (a, b) in queries.q1_mut().iter_mut() {
+        // Access second query  
+    }
+}
+```
+
+By putting conflicting Queries in a QuerySet, the Rust borrow checker protects us from unsafe query accesses. This allowed removal of all safety checks and locks from query access, making Bevy ECS 100% lock-free.
+
+### Query API Changes in Bevy 0.3
+
+**Changed in Bevy 0.3**
+
+Several query methods were renamed and improved:
+
+- `query.entity(entity)` → `query.get(entity)` (returns full query result)
+- `query.get::<Component>(entity)` → `query.get_component::<Component>(entity)` (for single component access)
+- Added separate `query.iter()` and `query.iter_mut()` for read-only and mutable iteration
+- Added `query.get(entity)` and `query.get_mut(entity)` for entity-specific access
+
+**Before (0.2):**
+```rust
+if let Ok(mut result) = query.entity(entity) {
+    if let Some((a, b)) = result.get() {
+        // access components here
+    }
+}
+```
+
+**After (0.3):**
+```rust
+if let Ok((a, b)) = query.get(entity) {
+    // boilerplate be gone!
+}
+```
+
 ### Or Queries
 
 **Added in Bevy 0.2**
@@ -215,6 +286,25 @@ fn system(state: Local<State>, &Position) {
     // do something
 }
 ```
+
+### Thread Local Resources
+
+**Added in Bevy 0.3**
+
+Some resource types cannot (or should not) be passed between threads. This is often true for low-level APIs like windowing, input, and audio. Thread local resources can only be accessed from the main thread using "thread local systems":
+
+```rust
+// In your app setup
+app.add_thread_local_resource(MyResource);
+
+// A thread local system
+fn system(world: &mut World, resources: &mut Resources) {
+    let my_resource = resources.get_thread_local::<MyResource>().unwrap();
+    // do something with my_resource
+}
+```
+
+Thread local systems have exclusive access to the World and Resources, and must run on the main thread.
 
 ## Other System Features
 
@@ -320,6 +410,41 @@ Read-only traits were implemented for queries that don't mutate anything. This a
 This gives a significant speed boost. This can be done safely due to a combination of the new read-only queries and changing World mutation APIs to be a mutable World borrow.
 
 As a result of these optimizations, direct component lookup is much faster.
+
+## Performance Improvements in Bevy 0.3
+
+**Added in Bevy 0.3**
+
+Bevy 0.3 brought additional significant performance improvements:
+
+### Removed All Locks from Query Access
+
+By introducing QuerySets for conflicting queries, all atomic locks could be removed from query access. This makes queries exactly as fast as direct World access.
+
+### Removed Archetype Safety Checks
+
+Since queries are verified once during schedule construction, safety checks don't need to happen on every query access. This reduced overhead significantly.
+
+### Rewritten QueryIter
+
+QueryIter was completely rewritten to be simpler and more optimizable. This resolved performance inconsistencies where some system patterns performed better than others. Now all query iteration is on the "fast path".
+
+### Upstream hecs Improvements
+
+Ported performance improvements from upstream hecs:
+- Improved iteration over heavily fragmented archetypes
+- Improved component insertion times
+
+### Benchmark Results
+
+**Entity Component Lookup** (per 100k operations, smaller is better):
+- Bevy 0.2: ~40-50ms with locks
+- Bevy 0.3: ~5-10ms without locks (5-10x faster!)
+
+**Component Insertion**: Improved significantly
+**Fragmented Iteration**: Much faster for complex archetype structures
+
+The query access improvements make Bevy ECS queries as fast as direct World access while maintaining safety through compile-time checks.
 
 ## Built on Hecs
 

@@ -2,15 +2,13 @@
 
 Transforms control the position, rotation, and scale of entities in Bevy.
 
-## Transform System Rewrite in Bevy 0.2
+## Transform Evolution
 
-**Changed in Bevy 0.2**
+The transform system has undergone multiple rewrites to find the optimal API and implementation.
 
-The transform system underwent a major rewrite between Bevy 0.1 and 0.2.
+## Bevy 0.1: Separate Components
 
-### Old System (Bevy 0.1)
-
-The old transform system used separate Translation, Rotation, and Scale components as the "source of truth":
+**Bevy 0.1** used separate Translation, Rotation, and Scale components as the "source of truth":
 
 ```rust
 // Bevy 0.1
@@ -19,20 +17,22 @@ fn system(translation: &Translation, rotation: &Rotation, scale: &Scale) {
 }
 ```
 
-Users modified these components in their systems, after which they were synced to a LocalTransform component, which was in turn synced to a global Transform component, taking hierarchy into account.
+Users modified these components, which were then synced to LocalTransform and Transform components.
 
 **Benefits:**
-- Slightly more cache efficient to retrieve individual components (less data needs to be accessed)
-- Theoretically more parallel-friendly - systems that only access Translation won't block systems accessing Rotation
+- Slightly more cache efficient for individual component access
+- More parallel-friendly (different systems could access different components)
 
 **Downsides:**
-- The individual components are the source of truth, so LocalTransform is out of date when user systems are running. If an up-to-date "full transform" is needed, it must be manually constructed by accessing all three components.
-- Very hard to reason about - 5 components users need to think about and they all interact with each other differently
-- Setting a Transform to a specific matrix value (ex: `Mat4::look_at()`) was extremely cumbersome, and the value would be immediately overwritten unless the user explicitly disabled component syncing
+- LocalTransform out of date during user systems
+- Hard to reason about (5 components)
+- Matrix manipulation extremely cumbersome
 
-### New System (Bevy 0.2)
+## Bevy 0.2: Unified Transform with Matrix
 
-The new system uses a single unified local-to-parent Transform component as the source of truth, and a computed GlobalTransform component for world-space transforms:
+**Changed in Bevy 0.2**
+
+Moved to a single unified Transform component (4x4 matrix) as the source of truth, plus GlobalTransform for world-space:
 
 ```rust
 // Bevy 0.2
@@ -46,10 +46,50 @@ fn system(transform: &Transform) {
 ```
 
 **Benefits:**
-- Much easier to use and reason about
-- Up-to-date transform always available
-- Direct matrix manipulation is straightforward
-- Only 2 components to think about
+- Simpler API (2 components instead of 5)
+- Always up-to-date
+- Easier matrix manipulation
+
+**Remaining Issues:**
+- Matrix as source of truth accumulates error over time
+- API still somewhat cumbersome (accessors needed)
+- More expensive to store and compute in some cases
+
+## Bevy 0.3: Similarity Transform
+
+**Changed in Bevy 0.3**
+
+Transform was rewritten again to use a "similarity" (translation + rotation + scale) as the source of truth:
+
+```rust
+// Bevy 0.3+
+fn system(mut transform: Mut<Transform>) {
+    // Direct field access!
+    transform.translation += Vec3::new(1.0, 0.0, 0.0);
+    
+    // Rotate 180 degrees (pi) around the y-axis
+    transform.rotation *= Quat::from_rotation_y(PI);
+    
+    // Scale 2x
+    transform.scale *= 2.0;
+}
+```
+
+**Benefits:**
+- **No error accumulation** - Similarity doesn't accumulate floating-point errors like matrices do
+- **Direct field access** - translation, rotation, and scale are exposed as public fields
+- **Simpler API** - No need for accessor methods
+- **More efficient** - Cheaper to store and compute hierarchies in many cases
+- **More correct** - Maintains numerical stability
+
+**Transform Fields:**
+- `translation: Vec3` - Position in 3D space
+- `rotation: Quat` - Rotation as a quaternion
+- `scale: Vec3` - Scale along each axis
+
+This is the best version yet - easier to use, more correct, and faster!
+
+This is the best version yet - easier to use, more correct, and faster!
 
 ## Working with Transforms
 
@@ -57,9 +97,9 @@ fn system(transform: &Transform) {
 
 ```rust
 fn system(transform: &Transform) {
-    let translation = transform.translation();
-    let rotation = transform.rotation();
-    let scale = transform.scale();
+    let translation = transform.translation;  // Direct field access
+    let rotation = transform.rotation;
+    let scale = transform.scale;
 }
 ```
 
@@ -67,7 +107,14 @@ fn system(transform: &Transform) {
 
 ```rust
 fn system(mut transform: Mut<Transform>) {
-    // Transform modification here
+    // Move
+    transform.translation.x += 1.0;
+    
+    // Rotate
+    transform.rotation *= Quat::from_rotation_y(0.1);
+    
+    // Scale
+    transform.scale *= 1.01;
 }
 ```
 
@@ -78,12 +125,12 @@ The `GlobalTransform` component contains the world-space transform, taking paren
 ```rust
 fn system(global_transform: &GlobalTransform) {
     // Read world-space transform
+    let world_position = global_transform.translation;
 }
 ```
 
 ## Optimization
 
-**Added in Bevy 0.2**
 
 Transform systems are optimized to only run on changes, avoiding unnecessary recalculation when transforms haven't been modified.
 

@@ -7,6 +7,7 @@
 - [Bevy Apps](./apps.md)
 - [Bevy ECS](./ecs.md)
 - [Bevy UI](./ui.md)
+- [Windows](./windows.md)
 
 # 2D and 3D Features
 
@@ -31,6 +32,7 @@
 # Platforms
 
 - [Web Platform Support](./web-support.md)
+- [Mobile Platform Support](./mobile-support.md)
 
 # Development
 

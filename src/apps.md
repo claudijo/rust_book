@@ -16,6 +16,7 @@ This App pulls in no features and literally does nothing. Running the program wo
 
 ## Adding Default Plugins
 
+**Bevy 0.1-0.2:**
 ```rust
 fn main() {
     App::build()
@@ -24,7 +25,54 @@ fn main() {
 }
 ```
 
-`add_default_plugins()` adds all of the features you probably expect from a game engine: a 2D / 3D renderer, asset loading, a UI system, windows, input, etc.
+**Bevy 0.3+ (Plugin Groups):**
+```rust
+fn main() {
+    App::build()
+        .add_plugins(DefaultPlugins)
+        .run();
+}
+```
+
+`DefaultPlugins` is now a PluginGroup that adds all of the core features: 2D/3D renderer, asset loading, UI system, windows, input, etc.
+
+## Plugin Groups
+
+**Added in Bevy 0.3**
+
+PluginGroups are ordered collections of plugins that can be individually enabled or disabled:
+
+```rust
+// Use all default plugins
+app.add_plugins(DefaultPlugins);
+
+// Disable specific plugins in a group
+app.add_plugins_with(DefaultPlugins, |group| {
+    group.disable::<RenderPlugin>()
+         .disable::<AudioPlugin>()
+});
+```
+
+### Creating Custom Plugin Groups
+
+You can create your own plugin groups:
+
+```rust
+pub struct MyGamePlugins;
+
+impl PluginGroup for MyGamePlugins {
+    fn build(&mut self, group: &mut PluginGroupBuilder) {
+        group.add(PhysicsPlugin)
+             .add(NetworkingPlugin)
+             .add(GameLogicPlugin);
+    }
+}
+
+// Use your custom plugin group
+app.add_plugins(MyGamePlugins);
+```
+
+This provides much more flexibility than the old static `add_default_plugins()` method.
 
 ## Manual Plugin Registration
 

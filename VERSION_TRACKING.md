@@ -213,7 +213,79 @@ This document tracks which content came from which Bevy version.
 
 ---
 
-## Bevy 0.3 - 0.18
+## Bevy 0.3 (November 3, 2020)
+
+**Source**: https://bevyengine.org/news/bevy-0-3/
+
+**Status**: ✅ Complete - All content integrated
+
+### New Chapters Added
+
+1. **Mobile Platform Support** - Android and iOS initial support, touch input
+2. **Windows** - Dynamic window settings, configuration, platform features
+
+### Major Updates to Existing Chapters
+
+1. **Bevy ECS** - Query ergonomics (removed &mut), 100% lockless with QuerySets, thread local resources, major performance improvements (5-10x faster lookups)
+2. **Transforms** - Complete rewrite showing evolution from 0.1→0.2→0.3, similarity-based transform with direct field access
+3. **Assets** - Handle reference counting, multi-asset loaders, sub-asset loading, AssetIo trait, dependencies, removed load_sync
+4. **3D Features** - GLTF scene loader (loads all meshes/textures), flexible vertex attributes, index buffer specialization
+5. **Input** - Touch input API, gamepad settings (deadzones, sensitivity)
+6. **Web Support** - WASM asset loading via HTTP fetch
+7. **Bevy Apps** - Plugin Groups replaced add_default_plugins, custom groups, enable/disable
+
+### Key Features
+
+**ECS Improvements:**
+- 100% lockless parallel ECS with QuerySets
+- Query ergonomics: `query.iter()` instead of `&mut query.iter()`
+- Query API: `query.get(entity)` instead of `query.entity(entity).get()`
+- Thread local resources for main-thread-only types
+- 5-10x performance improvement in entity lookups
+
+**Transform Re-Rewrite:**
+- Similarity-based (translation + rotation + scale)
+- Direct field access: `transform.translation`, `transform.rotation`, `transform.scale`
+- No error accumulation
+- Simpler API, more correct, faster
+
+**Asset System Overhaul:**
+- Automatic reference counting and freeing
+- Multi-asset loaders (load multiple assets from one file)
+- Sub-asset loading: `"file.gltf#Mesh0/Primitive0"`
+- AssetIo trait for platform-specific storage
+- Asset dependencies
+- load() no longer requires unwrap()
+- Removed load_sync() (always async)
+
+**Platform Support:**
+- Initial Android support
+- Initial iOS support  
+- Touch input API
+- WASM asset loading
+- Dynamic window settings
+
+**3D/Mesh:**
+- GLTF scene loader (all meshes and textures)
+- Flexible vertex attributes
+- Index buffer specialization (u32 default)
+
+**Developer Experience:**
+- Plugin Groups for flexible plugin management
+- Gamepad settings customization
+- Dynamic window property changes
+
+### Breaking Changes
+
+- Query API renamed methods
+- Transform direct field access (no more accessors)
+- Asset load() returns handle without unwrap
+- add_default_plugins() → add_plugins(DefaultPlugins)
+- Mesh vertex attribute API changed
+
+---
+
+## Bevy 0.4 - 0.18
 
 **Status**: ⏳ Awaiting input
 
@@ -237,5 +309,6 @@ When new versions are added:
 
 - **Bevy 0.1**: Foundation complete (14 chapters, ~6,100 words)
 - **Bevy 0.2**: Integrated (18 chapters, ~9,000+ words, 4 new, 9 updated)
-- **Bevy 0.3+**: Pending
+- **Bevy 0.3**: Integrated (20 chapters, ~13,000+ words, 2 new, 8 major updates)
+- **Bevy 0.4+**: Pending
 

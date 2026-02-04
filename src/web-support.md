@@ -11,6 +11,22 @@ Specifically, Bevy apps can:
 - React to input events
 - Create an empty canvas (using winit)
 - Use single-threaded task scheduling
+- **Load assets (added in 0.3)** - via HTTP fetch() requests
+
+### WASM Asset Loading
+
+**Added in Bevy 0.3**
+
+You can now load assets in WASM just like on any other platform:
+
+```rust
+asset_server.load("sprite.png");
+```
+
+If the asset hasn't already been loaded, this makes a `fetch()` request to retrieve the asset over HTTP. The AssetIo trait (added in 0.3) provides the abstraction that enables different storage backends:
+- Desktop: Filesystem
+- Android: Android Asset Manager
+- WASM: HTTP fetch() requests
 
 ## Current Limitations
 

@@ -60,6 +60,31 @@ Gamepad buttons include:
 - Shoulder buttons and triggers
 - Start, Select, and other standard buttons
 
+### Gamepad Settings
+
+**Added in Bevy 0.3**
+
+The `GamepadSettings` resource allows customization of gamepad behavior on a per-controller, per-axis/button basis:
+
+```rust
+fn setup_gamepad(mut gamepad_settings: ResMut<GamepadSettings>) {
+    gamepad_settings.axis_settings.insert(
+        GamepadAxis(Gamepad(0), GamepadAxisType::LeftStickX),
+        AxisSettings {
+            positive_high: 0.8,     // Upper deadzone
+            positive_low: 0.01,     // Lower deadzone
+            ..Default::default()
+        },
+    );
+}
+```
+
+This allows you to:
+- Set deadzones for analog sticks
+- Configure trigger sensitivity
+- Customize per-controller settings
+- Fine-tune input response
+
 ## Input Iterator Methods
 
 **Added in Bevy 0.2**
@@ -93,4 +118,62 @@ The input system automatically tracks three states for each input:
 - **Just Released**: Was released this frame
 
 This makes it easy to handle both continuous input (like movement) and discrete input (like menu navigation).
+
+## Touch Input
+
+**Added in Bevy 0.3**
+
+Bevy supports touch input for mobile and touch-enabled devices:
+
+```rust
+fn touch_system(touches: Res<Touches>) {
+    // Iterate all current touches and retrieve their state
+    for touch in touches.iter() {
+        println!("active touch: {:?}", touch);
+        println!("  position: {}", touch.position());
+        println!("  force: {:?}", touch.force());
+    }
+
+    // Just pressed this frame
+    for touch in touches.iter_just_pressed() {
+        println!("just pressed {:?}", touch);
+    }
+
+    // Just released this frame
+    for touch in touches.iter_just_released() {
+        println!("just released {:?}", touch);
+    }
+
+    // Just cancelled this frame
+    for touch in touches.iter_just_cancelled() {
+        println!("just cancelled {:?}", touch);
+    }
+}
+```
+
+### Touch Properties
+
+Each touch provides:
+- **Position**: Touch location on screen
+- **Force**: Touch pressure (if supported by device)
+- **ID**: Unique identifier for tracking multi-touch
+
+### Raw Touch Events
+
+You can also consume raw touch events:
+
+```rust
+fn touch_events(mut touch_events: EventReader<TouchInput>) {
+    for event in touch_events.iter() {
+        // Handle raw touch events
+        println!("Touch event: {:?}", event);
+    }
+}
+```
+
+Touch input enables:
+- Mobile game controls
+- Tablet interfaces
+- Touch-screen displays
+- Multi-touch gestures
 

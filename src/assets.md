@@ -39,43 +39,102 @@ fn system(mut state: Local<State>, texture_events: Res<Events<AssetEvent>>) {
 
 The `Assets<T>` collection doesn't know anything about filesystems or multi-threading. This is the responsibility of the AssetServer resource:
 
+**Bevy 0.1-0.2:**
 ```rust
 fn system(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut textures: ResMut<Assets<Texture>>
 ) {
-    // this will begin asynchronously loading "texture.png" in parallel
+    // Had to unwrap the result
     let texture_handle: Handle<Texture> = asset_server.load("texture.png").unwrap();
-
-    // the texture may not be loaded yet, but you can still add the handle as a
-    // component immediately. Whenever possible, internal Bevy systems will wait
-    // for assets to be ready before using them:
-    let entity = commands.spawn((texture_handle,));
-
-    // you can also asynchronously load entire folders (recursively) by adding
-    // them as an "asset folder"
-    asset_server.load_asset_folder("assets").unwrap();
-
-    // you can get the handle of any asset (either currently loading or loaded) like this:
-    let music_handle: Handle<AudioSource> = asset_server
-        .get_handle("assets/music.mp3")
-        .unwrap();
-
-    // when assets have finished loading, they are automatically added to the
-    // appropriate Assets<T> collection. You can check if an asset is ready like this:
-    if let Some(texture) = textures.get(&texture_handle) {
-        // do something with texture
-    }
-
-    // sometimes you want access to an asset immediately. You can block the current
-    // system until an asset has finished loading and immediately update Assets<T>
-    // using the "load_sync" method
-    let cool_sprite: &Texture = asset_server
-        .load_sync(&mut textures, "assets/cool_sprite.png")
+    
+    // Could block with load_sync (removed in 0.3)
+    let sprite: &Texture = asset_server
+        .load_sync(&mut textures, "sprite.png")
         .unwrap();
 }
 ```
+
+**Bevy 0.3+ (improved):**
+```rust
+fn system(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut textures: ResMut<Assets<Texture>>
+) {
+    // No more unwrap needed! Returns a strong handle
+    let texture_handle: Handle<Texture> = asset_server.load("texture.png");
+
+    // The texture may not be loaded yet, but you can still use the handle
+    // Bevy systems will wait for assets to be ready when needed
+    commands.spawn(SpriteComponents {
+        material: materials.add(texture_handle.into()),
+        ..Default::default()
+    });
+
+    // You can load entire folders recursively
+    asset_server.load_folder("assets").unwrap();
+
+    // Get handle for any asset (loading or loaded)
+    let music: Handle<AudioSource> = asset_server
+        .get_handle("assets/music.mp3")
+        .unwrap();
+
+    // Check if an asset is loaded
+    if let Some(texture) = textures.get(&texture_handle) {
+        // do something with texture
+    }
+}
+```
+
+## Asset System Improvements in Bevy 0.3
+
+**Changed in Bevy 0.3**
+
+The asset system underwent major improvements:
+
+### Handle Reference Counting
+
+Assets are now automatically freed when their handle reference count reaches zero:
+
+```rust
+// Calling load() returns a strong handle
+let handle = asset_server.load("sprite.png");
+
+// Cloning increases the reference count
+let second_handle = handle.clone();
+
+// When all handles are dropped, the asset is freed
+```
+
+### Multi-Asset Loaders
+
+AssetLoaders can now load multiple assets of multiple types. Previously they could only produce a single asset of a single type. This is crucial for formats like GLTF that contain meshes, textures, and scenes.
+
+### Sub-Asset Loading
+
+You can now load specific assets from within a file:
+
+```rust
+// Load a specific mesh primitive from a GLTF file
+let mesh = asset_server.load("my_scene.gltf#Mesh0/Primitive0");
+```
+
+### AssetIo Trait
+
+The AssetServer is now backed by the AssetIo trait, allowing different storage backends:
+- **Desktop**: Loads from filesystem
+- **Android**: Uses Android Asset Manager  
+- **Web**: Makes HTTP fetch() requests
+
+### Asset Dependencies
+
+Assets can depend on other assets, which are automatically loaded. For example, a scene can reference textures and meshes, and they'll all load automatically.
+
+### Removed load_sync()
+
+`AssetServer::load_sync()` was removed. It wasn't WASM-friendly, encouraged blocking (causing hitching), and was incompatible with the new AssetLoader API. Asset loading is now always asynchronous. Load assets, check status in systems, and change state accordingly.
 
 ## Hot Reloading
 
