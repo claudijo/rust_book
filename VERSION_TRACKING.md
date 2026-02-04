@@ -467,7 +467,92 @@ This document tracks which content came from which Bevy version.
 
 ---
 
-## Bevy 0.6 - 0.18
+## Bevy 0.6 (January 8, 2022)
+
+**Source**: 
+- Release notes: https://bevy.org/news/bevy-0-6/
+- Migration guide: https://bevy.org/learn/migration-guides/0-5-to-0-6/
+
+**Status**: ✅ Complete integration
+
+### New Chapters Added
+
+1. **The New Bevy Renderer** - Complete renderer rewrite, pipelined architecture, render worlds
+
+### Major Updates to Existing Chapters
+
+1. **Bevy ECS** - Component derive required, App::new(), .system() optional, single() infallible
+2. **Apps** - App::new() throughout, AppBuilder merged into App, Plugin trait changes
+3. **PBR** - Shadow support, roughness → perceptual_roughness, Light → PointLight
+4. **2D Features** - Simplified SpriteBundle (no ColorMaterial, texture directly on bundle)
+
+### Key Features
+
+**The New Renderer (Complete Rewrite):**
+- Pipelined rendering (Extract → Prepare → Queue → Render)
+- Render worlds (app world vs render world separation)
+- 10x+ performance improvements
+- Clustered forward rendering (hundreds of lights)
+- Directional & point light shadows
+- Frustum culling (automatic)
+- Native WebGL2 support (complete)
+- High-level custom materials
+- WGSL shader support
+- Shader imports and preprocessor
+
+**API Simplifications:**
+- Rust 2021 required
+- App::build() → App::new()
+- AppBuilder merged into App
+- Component trait must be derived
+- .system() now optional
+- single()/single_mut() infallible (use get_single for fallible)
+- SpriteBundle simplified (no ColorMaterial)
+- Visible → Visibility
+
+**Rendering Improvements:**
+- Light → PointLight (clarity)
+- Shadow support (directional & point lights)
+- perceptual_roughness (renamed from roughness)
+- AlphaMode on materials (transparency)
+- Render phases (Opaque, AlphaMask, Transparent)
+
+**Shader Improvements:**
+- WGSL language support
+- Shader imports (#import)
+- Shader preprocessor (#ifdef)
+- Custom materials made simple
+
+### Breaking Changes
+
+- Rust 2021 edition required
+- Component derive required for all components
+- App::build() → App::new()
+- AppBuilder no longer exists
+- Plugin::build takes App instead of AppBuilder
+- Light/LightBundle → PointLight/PointLightBundle
+- Visible → Visibility
+- is_transparent removed (use alpha_mode)
+- roughness → perceptual_roughness
+- SpriteBundle structure changed
+- resize_mode → custom_size
+- System Param lifetime split ('w, 's)
+- QuerySet uses QueryState
+- Input::update() → Input::clear()
+- SystemState → SystemMeta (naming)
+- Vector casting: as_i32() → as_ivec3()
+
+### Performance Improvements
+
+- Sprite rendering: 10x+ faster
+- 3D rendering: Better batching, parallel commands
+- Clustered lighting enables many lights
+- Frustum culling saves rendering off-screen objects
+- Pipelined rendering overlaps app logic with rendering
+
+---
+
+## Bevy 0.7 - 0.18
 
 **Status**: ⏳ Awaiting input
 
@@ -479,6 +564,7 @@ This document tracks which content came from which Bevy version.
 - **Bevy 0.2**: Integrated (18 chapters, ~9,000 words)
 - **Bevy 0.3**: Integrated (20 chapters, ~13,000 words)
 - **Bevy 0.4**: Integrated (21 chapters, ~16,000 words)
-- **Bevy 0.5**: Integrated (22 chapters, ~18,500 words, PBR + ECS V2)
-- **Bevy 0.6+**: Pending
+- **Bevy 0.5**: Integrated (22 chapters, ~18,500 words)
+- **Bevy 0.6**: Integrated (23 chapters, ~21,500 words, New Renderer!)
+- **Bevy 0.7+**: Pending
 

@@ -4,15 +4,42 @@ Bevy provides several features for 2D game development.
 
 ## Sprites
 
-You can use any Texture asset as a sprite directly:
-
+**Bevy 0.6+ (simplified):**
 ```rust
-let texture = asset_server.load("icon.png").unwrap();
-commands.spawn(SpriteComponents {
-    material: materials.add(texture.into()),
+let texture = asset_server.load("icon.png");
+commands.spawn_bundle(SpriteBundle {
+    texture,
+    sprite: Sprite {
+        color: Color::rgb(0.8, 0.2, 0.2),  // Tint color
+        custom_size: Some(Vec2::new(256.0, 256.0)),
+        ..Default::default()
+    },
     ..Default::default()
 });
 ```
+
+**Before 0.6:**
+```rust
+let texture = asset_server.load("icon.png").unwrap();
+commands.spawn_bundle(SpriteBundle {
+    material: materials.add(ColorMaterial {
+        texture: Some(texture),
+        color: Color::WHITE,
+    }),
+    sprite: Sprite {
+        size: Vec2::new(256.0, 256.0),
+        resize_mode: SpriteResizeMode::Manual,
+        ..Default::default()
+    },
+    ..Default::default()
+});
+```
+
+**Changes in 0.6:**
+- Texture is now directly on SpriteBundle (no more ColorMaterial)
+- Color is on the Sprite component
+- `custom_size` replaces `size` + `resize_mode`
+- Much simpler and more intuitive!
 
 ## Sprite Sheets
 

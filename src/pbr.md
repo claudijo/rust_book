@@ -26,7 +26,7 @@ commands.spawn_bundle(PbrBundle {
     mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
     material: materials.add(StandardMaterial {
         base_color: Color::rgb(0.8, 0.7, 0.6),
-        roughness: 0.5,
+        perceptual_roughness: 0.5,  // Renamed from "roughness" in 0.6
         metallic: 0.0,
         reflectance: 0.5,
         emissive: Color::BLACK,
@@ -36,15 +36,18 @@ commands.spawn_bundle(PbrBundle {
 });
 ```
 
+**Changed in Bevy 0.6:** The `roughness` field was renamed to `perceptual_roughness` to better reflect that it uses perceptual (not linear) roughness values.
+
 ### Material Properties
 
 **base_color**: The base color of the material
 - Represents the perceived color in neutral lighting
 - Can be set as a solid color
 
-**roughness**: How rough the surface is (0.0 to 1.0)
+**perceptual_roughness**: How rough the surface is (0.0 to 1.0)
 - 0.0 = perfectly smooth/mirror-like
 - 1.0 = completely rough/matte
+- Uses perceptual roughness (more intuitive than linear)
 - Affects how light scatters when reflecting
 
 **metallic**: Whether the material is metallic (0.0 to 1.0)
@@ -102,31 +105,75 @@ materials.add(StandardMaterial {
 
 ## Lighting
 
-PBR materials require proper lighting to look their best:
+PBR materials require proper lighting to look their best.
+
+### Point Lights
+
+**Changed in Bevy 0.6:** `Light` and `LightBundle` were renamed to `PointLight` and `PointLightBundle`.
 
 ```rust
-// Directional light (sun)
-commands.spawn_bundle(LightBundle {
-    light: Light {
-        color: Color::rgb(1.0, 1.0, 1.0),
-        intensity: 3000.0,
-        ..Default::default()
-    },
-    transform: Transform::from_translation(Vec3::new(0.0, 10.0, 0.0)),
-    ..Default::default()
-});
-
 // Point light
 commands.spawn_bundle(PointLightBundle {
     point_light: PointLight {
         intensity: 1500.0,
         color: Color::rgb(1.0, 0.9, 0.8),
+        range: 20.0,
         ..Default::default()
     },
     transform: Transform::from_translation(Vec3::new(4.0, 5.0, 4.0)),
     ..Default::default()
 });
 ```
+
+### Directional Lights
+
+```rust
+// Directional light (sun)
+commands.spawn_bundle(DirectionalLightBundle {
+    directional_light: DirectionalLight {
+        color: Color::rgb(1.0, 1.0, 1.0),
+        illuminance: 10000.0,
+        ..Default::default()
+    },
+    transform: Transform::from_rotation(Quat::from_euler(
+        EulerRot::XYZ,
+        -std::f32::consts::FRAC_PI_4,
+        std::f32::consts::FRAC_PI_4,
+        0.0,
+    )),
+    ..Default::default()
+});
+```
+
+### Shadows
+
+**Added in Bevy 0.6**
+
+Both directional and point lights now support shadows!
+
+```rust
+// Point light with shadows
+commands.spawn_bundle(PointLightBundle {
+    point_light: PointLight {
+        intensity: 1500.0,
+        shadows_enabled: true,  // Enable shadows
+        ..Default::default()
+    },
+    ..Default::default()
+});
+
+// Directional light with shadows
+commands.spawn_bundle(DirectionalLightBundle {
+    directional_light: DirectionalLight {
+        illuminance: 10000.0,
+        shadows_enabled: true,  // Enable shadows
+        ..Default::default()
+    },
+    ..Default::default()
+});
+```
+
+Shadows significantly enhance realism by showing where objects block light. The new renderer in 0.6 supports efficient shadow mapping for both light types.
 
 ## PBR Example
 

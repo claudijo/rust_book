@@ -4,28 +4,38 @@ A Bevy App is the starting point for any Bevy program.
 
 ## The Simplest App
 
+**Bevy 0.6+:**
 ```rust
 use bevy::prelude::*;
 
+fn main() {
+    App::new().run();
+}
+```
+
+**Before 0.6:**
+```rust
 fn main() {
     App::build().run();
 }
 ```
 
+**Changed in Bevy 0.6:** `App::build()` → `App::new()`, and AppBuilder was merged into App.
+
 This App pulls in no features and literally does nothing. Running the program would just immediately terminate.
 
 ## Adding Default Plugins
 
-**Bevy 0.1-0.2:**
+**Bevy 0.5-0.6:**
 ```rust
 fn main() {
-    App::build()
-        .add_default_plugins()
+    App::new()  // Changed from App::build() in 0.6
+        .add_plugins(DefaultPlugins)
         .run();
 }
 ```
 
-**Bevy 0.3+ (Plugin Groups):**
+**Bevy 0.3-0.4:**
 ```rust
 fn main() {
     App::build()
@@ -34,7 +44,7 @@ fn main() {
 }
 ```
 
-`DefaultPlugins` is now a PluginGroup that adds all of the core features: 2D/3D renderer, asset loading, UI system, windows, input, etc.
+`DefaultPlugins` is a PluginGroup that adds all core features: 2D/3D renderer, asset loading, UI system, windows, input, etc.
 
 ## Plugin Groups
 
@@ -92,6 +102,24 @@ fn main() {
 ```
 
 ## Creating Custom Plugins
+
+**Bevy 0.6+:**
+```rust
+impl Plugin for MyGamePlugins {
+    fn build(&self, app: &mut App) {  // App instead of AppBuilder
+        app.add_system(my_system);
+    }
+}
+```
+
+**Before 0.6:**
+```rust
+impl Plugin for MyGamePlugins {
+    fn build(&self, app: &mut AppBuilder) {
+        app.add_system(my_system.system());
+    }
+}
+```
 
 All engine and game logic is built using plugins. You can create your own plugins to organize your code.
 

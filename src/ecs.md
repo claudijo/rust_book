@@ -12,9 +12,33 @@ The ECS pattern encourages clean, decoupled designs by forcing you to break up y
 
 Unlike other Rust ECS implementations, which require complex lifetimes, traits, builder patterns, or macros, Bevy ECS uses normal Rust datatypes for all of these concepts:
 
-- **Components**: normal Rust structs
+- **Components**: normal Rust structs (derive `Component` in 0.6+)
 - **Systems**: normal Rust functions
 - **Entities**: a type containing a unique integer
+
+**Component Derive (Bevy 0.6+):**
+
+```rust
+#[derive(Component)]
+struct Position(f32);
+
+#[derive(Component)]
+struct Velocity(f32);
+```
+
+Before 0.6, any type could be a component. Starting in 0.6, you must derive (or manually implement) the `Component` trait. This enables compile-time optimizations.
+
+### Component Storage
+
+You can specify storage type at compile time:
+
+```rust
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+struct MyComponent;
+```
+
+Default is Table storage. SparseSet is better for components that are rarely accessed or frequently added/removed.
 
 ## Ergonomics
 
@@ -23,27 +47,34 @@ Bevy ECS is designed to be the most ergonomic ECS in existence. Here's a complet
 ```rust
 use bevy::prelude::*;
 
+#[derive(Component)]  // Required in 0.6+
 struct Velocity(f32);
+
+#[derive(Component)]
 struct Position(f32);
 
 // this system spawns entities with the Position and Velocity components
 fn setup(mut commands: Commands) {
     commands
-        .spawn((Position(0.0), Velocity(1.0),))
-        .spawn((Position(1.0), Velocity(2.0),));
+        .spawn()
+        .insert_bundle((Position(0.0), Velocity(1.0)))
+        .spawn()
+        .insert_bundle((Position(1.0), Velocity(2.0)));
 }
 
 // this system runs on each entity with a Position and Velocity component
-fn movement(mut position: Mut<Position>, velocity: &Velocity) {
-    position.0 += velocity.0;
+fn movement(mut query: Query<(&mut Position, &Velocity)>) {
+    for (mut position, velocity) in query.iter_mut() {
+        position.0 += velocity.0;
+    }
 }
 
 // the app entry point
 fn main() {
-    App::build()
-        .add_default_plugins()
-        .add_startup_system(setup.system())
-        .add_system(movement.system())
+    App::new()  // Changed from App::build() in 0.6
+        .add_plugins(DefaultPlugins)
+        .add_startup_system(setup)  // .system() optional in 0.6
+        .add_system(movement)
         .run();
 }
 ```
@@ -248,6 +279,31 @@ if let Ok((a, b)) = query.get(entity) {
     // boilerplate be gone!
 }
 ```
+
+### Single Entity Queries
+
+**Changed in Bevy 0.6**
+
+For queries that should have exactly one result:
+
+**Bevy 0.6+ (infallible - panics if not exactly one):**
+```rust
+fn player_system(query: Query<&Transform, With<Player>>) {
+    let player_transform = query.single();  // Panics if != 1 entity
+    // Use player_transform
+}
+```
+
+**Bevy 0.6+ (fallible - returns Result):**
+```rust
+fn player_system(query: Query<&Transform, With<Player>>) {
+    if let Ok(player_transform) = query.get_single() {
+        // Use player_transform
+    }
+}
+```
+
+Before 0.6, `single()` returned a Result. In 0.6, it panics for convenience. Use `get_single()` if you need the old behavior.
 
 ### Or Queries
 
@@ -508,13 +564,25 @@ Being able to use Rust functions directly as systems might feel like magic, but 
 fn some_system() { }
 
 fn main() {
-    App::build()
-        .add_system(some_system.system())
+    App::new()  // Changed from App::build() in 0.6
+        .add_system(some_system)  // .system() optional in 0.6!
         .run();
 }
 ```
 
-The `.system()` call takes the function pointer and converts it to a `Box<dyn System>`. This works because Bevy implements the `IntoQuerySystem` trait for all functions that match a certain set of function signatures.
+**Changed in Bevy 0.6:**
+- `App::build()` → `App::new()` (AppBuilder merged into App)
+- `.system()` is now **optional**! You can still use it for configuration:
+
+```rust
+// Both work in 0.6
+App::new()
+    .add_system(my_system)
+    .add_system(other_system.label("other"))  // Use .system() for config
+    .run();
+```
+
+The `.system()` call (when used) converts the function pointer to a `Box<dyn System>`. This works because Bevy implements the `IntoQuerySystem` trait for all functions that match certain signatures.
 
 ## Performance Improvements in Bevy 0.2
 
