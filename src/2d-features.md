@@ -41,6 +41,49 @@ commands.spawn_bundle(SpriteBundle {
 - `custom_size` replaces `size` + `resize_mode`
 - Much simpler and more intuitive!
 
+## Sprite Flipping
+
+**Added in Bevy 0.5**
+
+Sprites can be easily and efficiently flipped along the x or y axis:
+
+```rust
+commands.spawn_bundle(SpriteBundle {
+    texture: asset_server.load("character.png"),
+    sprite: Sprite {
+        flip_x: true,   // Flip horizontally
+        flip_y: false,  // Don't flip vertically
+        ..Default::default()
+    },
+    ..Default::default()
+});
+```
+
+**Benefits:**
+- ✅ Efficient (no texture duplication)
+- ✅ Simple API
+- ✅ Perfect for character facing directions
+- ✅ Works with sprite sheets
+
+**Common use case - character facing:**
+```rust
+fn flip_character(
+    input: Res<Input<KeyCode>>,
+    mut query: Query<&mut Sprite, With<Player>>
+) {
+    for mut sprite in query.iter_mut() {
+        if input.pressed(KeyCode::A) {
+            sprite.flip_x = true;  // Face left
+        }
+        if input.pressed(KeyCode::D) {
+            sprite.flip_x = false; // Face right
+        }
+    }
+}
+```
+
+No need for separate left/right sprite assets!
+
 ## Sprite Sheets
 
 Sprite sheets (also known as texture atlases) can be used for animations, tile sets, or just for optimized sprite rendering.

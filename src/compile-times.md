@@ -49,6 +49,67 @@ The "fast compiles" configuration achieves usable iterative compile times while 
 
 1. **LLD linker**: LLD is much faster at linking than the default Rust linker. This is the biggest win.
 
+2. **Dynamic Linking** (Bevy 0.4+): Link Bevy as a shared library for development.
+
+3. **Incremental compilation**: Use Cargo's incremental compilation for better caching.
+
+## Dynamic Linking
+
+**Added in Bevy 0.4**
+
+Dynamic linking significantly reduces iterative compile times during development:
+
+```bash
+# For your Bevy app
+cargo run --features bevy/dynamic
+
+# For Bevy examples  
+cargo run --features dynamic --example my_example
+```
+
+### Performance Impact
+
+**Example: Recompiling 3d_scene after a change**
+- Static linking: ~30 seconds
+- **Dynamic linking: ~4 seconds**
+
+**7-8x faster iteration!**
+
+### How It Works
+
+With dynamic linking, Bevy's engine code is compiled into a shared library (`.so`, `.dylib`, `.dll`). When you change your game code:
+- ✅ Only your code recompiles
+- ✅ Engine code is reused
+- ✅ Much faster linking
+
+### When to Use
+
+✅ **Use during development:**
+- Rapid iteration
+- Testing changes
+- Daily development work
+
+❌ **Don't use for release:**
+- Publishing your game
+- Final distribution
+- Release builds
+
+Disable the feature when building your final game binary!
+
+### Trade-offs
+
+**Pros:**
+- 👍 7-8x faster iterative compiles
+- 👍 Faster linking
+- 👍 Quick iteration cycle
+
+**Cons:**
+- 👎 Slightly larger debug builds
+- 👎 Requires managing shared libraries
+- 👎 Not suitable for distribution
+
+Combined with LLD linker and other optimizations, this keeps Bevy in the "ideal to fine" compile time range!
+
 2. **Nightly Rust Compiler**: Gives access to the latest performance improvements and "unstable" optimizations. Note that Bevy can still be compiled on stable Rust if that is a requirement for you.
 
 3. **Generic Sharing**: Allows crates to share monomorphized generic code instead of duplicating it. In some cases this allows us to "precompile" generic code so it doesn't affect iterative compiles.

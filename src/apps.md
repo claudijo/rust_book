@@ -24,6 +24,29 @@ fn main() {
 
 This App pulls in no features and literally does nothing. Running the program would just immediately terminate.
 
+## Cross-Platform Main Function
+
+**Added in Bevy 0.4**
+
+Most platforms (Windows, macOS, Linux, Web) work with normal main functions. However, some platforms (Android and iOS) require additional boilerplate. The `#[bevy_main]` attribute macro handles this automatically:
+
+```rust
+use bevy::prelude::*;
+
+#[bevy_main]
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .run();
+}
+```
+
+This single code works on **all platforms**: Windows, macOS, Linux, Android, iOS, and Web!
+
+**Without `#[bevy_main]`:** You'd need platform-specific boilerplate for mobile platforms.
+
+**With `#[bevy_main]`:** The macro inserts the necessary boilerplate automatically, enabling true "write once, run anywhere" for Bevy apps.
+
 ## Adding Default Plugins
 
 **Bevy 0.5-0.6:**

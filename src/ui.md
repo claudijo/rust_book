@@ -307,3 +307,72 @@ commands.spawn_bundle(Text2dBundle {
 
 **Note:** While `Transform::scale` works, adjusting `font_size` directly is generally better for crisp text rendering.
 
+## Bevy 0.5 Text Improvements
+
+**Added in Bevy 0.5:**
+
+### Rich Text
+
+Text can now have multiple "sections", each with their own style and formatting:
+
+```rust
+commands.spawn_bundle(TextBundle {
+    text: Text {
+        sections: vec![
+            TextSection {
+                value: "Score: ".to_string(),
+                style: TextStyle {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: 60.0,
+                    color: Color::WHITE,
+                },
+            },
+            TextSection {
+                value: "0".to_string(),
+                style: TextStyle {
+                    font: asset_server.load("fonts/FiraMono-Medium.ttf"),
+                    font_size: 60.0,
+                    color: Color::GOLD,
+                },
+            },
+            TextSection {
+                value: " points".to_string(),
+                style: TextStyle {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: 40.0,
+                    color: Color::GRAY,
+                },
+            },
+        ],
+        ..Default::default()
+    },
+    ..Default::default()
+});
+```
+
+**Benefits:**
+- Different fonts per section
+- Different sizes per section  
+- Different colors per section
+- All within a single Text component
+- Respects text layout rules
+
+**Use cases:**
+- Colored/highlighted text
+- Mixed font UI (labels + values)
+- Formatted game text
+- Dynamic text with varying styles
+
+### HIDPI Text
+
+**Added in Bevy 0.5**
+
+Text is now automatically rendered according to the monitor's scale factor, providing crisp text at any resolution:
+
+- ✅ Automatically detects DPI scaling
+- ✅ Renders at native resolution
+- ✅ Crisp on retina/HIDPI displays
+- ✅ No configuration needed
+
+Text now looks sharp on both standard and high-DPI displays!
+
