@@ -126,6 +126,33 @@ fn toggle_decorations(mut windows: ResMut<Windows>) {
 }
 ```
 
+### Window Transparency
+
+**Added in Bevy 0.6**
+
+Create transparent windows for widget-like applications:
+
+```rust
+fn main() {
+    App::new()
+        .insert_resource(WindowDescriptor {
+            transparent: true,
+            decorations: false,
+            ..Default::default()
+        })
+        .add_plugins(DefaultPlugins)
+        .run();
+}
+```
+
+This allows you to create apps that blend with the desktop background, perfect for:
+- Desktop widgets
+- Overlay applications  
+- Transparent HUDs
+- Borderless applications
+
+**Note:** Platform support varies. Works well on Windows, macOS, and Linux (with compositing).
+
 ### WASM Canvas
 
 On WASM, you can provide an existing canvas element:

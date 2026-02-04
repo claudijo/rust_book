@@ -159,6 +159,57 @@ println!("{}", my_trait.do_thing()); // "Hello World!"
 
 This enables calling traits on reflected types, which is useful for editor tools and plugin systems.
 
+## FromReflect Trait
+
+**Added in Bevy 0.6**
+
+The `FromReflect` trait enables creating "clones" of types using arbitrary Reflect implementations:
+
+```rust
+#[derive(Reflect, FromReflect)]
+struct Foo {
+    bar: usize,
+    baz: String,
+}
+
+// Create a concrete type from a reflected value
+let reflected: &dyn Reflect = &some_reflected_value;
+let foo = Foo::from_reflect(reflected).unwrap();
+```
+
+### Why FromReflect?
+
+Before FromReflect, you couldn't easily convert a `&dyn Reflect` back into a concrete type. This made it difficult to:
+- Clone reflected values
+- Deserialize into concrete types
+- Work with reflected collections properly
+
+**Use cases:**
+- Making reflected collections (like `Vec<T>`) work properly
+- "Round trip" conversions to and from Reflect types
+- Cloning dynamically typed values
+- Deserialization into concrete types
+
+**Example with collections:**
+```rust
+#[derive(Reflect, FromReflect)]
+struct Inventory {
+    items: Vec<Item>,
+}
+
+#[derive(Reflect, FromReflect)]
+struct Item {
+    name: String,
+    quantity: usize,
+}
+
+// Reflect can now properly clone the entire structure
+let reflected_inventory: &dyn Reflect = &inventory;
+let cloned = Inventory::from_reflect(reflected_inventory).unwrap();
+```
+
+This is especially important for scene serialization and editor tooling!
+
 ## Use Cases
 
 Reflection powers many Bevy features:

@@ -230,3 +230,80 @@ commands.spawn(button_bundle.clone());
 
 Fixed font atlas overflow issues that could occur with certain font sizes and character sets.
 
+## Bevy 0.6 Improvements
+
+**Added in Bevy 0.6:**
+
+### Overflow::Hidden
+
+UI nodes now respect the flexbox `Overflow::Hidden` property, which cuts off child content that extends beyond the parent's bounds:
+
+```rust
+commands.spawn_bundle(NodeBundle {
+    style: Style {
+        size: Size::new(Val::Px(200.0), Val::Px(100.0)),
+        overflow: Overflow::Hidden,  // Cut off children outside bounds
+        flex_direction: FlexDirection::Column,
+        ..Default::default()
+    },
+    color: Color::rgb(0.1, 0.1, 0.1).into(),
+    ..Default::default()
+})
+.with_children(|parent| {
+    // This content will be clipped if it exceeds parent size
+    parent.spawn_bundle(TextBundle {
+        text: Text::with_section(
+            "This is a very long text that might overflow...",
+            TextStyle {
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size: 20.0,
+                color: Color::WHITE,
+            },
+            Default::default(),
+        ),
+        ..Default::default()
+    });
+});
+```
+
+**Use cases:**
+- Scrollable lists
+- Text boxes with size limits
+- Clipped image viewers
+- Chat windows
+
+### Text2D Transforms
+
+Text2d now supports arbitrary transformations using the Transform component:
+
+```rust
+commands.spawn_bundle(Text2dBundle {
+    text: Text::with_section(
+        "Rotated Text!",
+        TextStyle {
+            font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+            font_size: 60.0,
+            color: Color::WHITE,
+        },
+        TextAlignment {
+            horizontal: HorizontalAlign::Center,
+            ..Default::default()
+        },
+    ),
+    transform: Transform {
+        translation: Vec3::new(0.0, 0.0, 1.0),
+        rotation: Quat::from_rotation_z(std::f32::consts::PI / 4.0),  // 45 degree rotation
+        scale: Vec3::splat(1.5),
+    },
+    ..Default::default()
+});
+```
+
+**Capabilities:**
+- Rotate text at any angle
+- Scale text (though font_size is usually better for crisp rendering)
+- Position text in 2D world space
+- Apply any transform (even 3D transformations!)
+
+**Note:** While `Transform::scale` works, adjusting `font_size` directly is generally better for crisp text rendering.
+

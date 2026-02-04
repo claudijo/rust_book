@@ -118,6 +118,60 @@ fn system(mut transform: Mut<Transform>) {
 }
 ```
 
+### Directional Vectors
+
+**Added in Bevy 0.6**
+
+Get direction vectors relative to the transform:
+
+```rust
+fn system(transform: &Transform) {
+    let left = transform.left();      // Points to the left
+    let right = transform.right();    // Points to the right
+    let up = transform.up();          // Points up
+    let down = transform.down();      // Points down
+    let forward = transform.forward(); // Points forward
+    let back = transform.back();      // Points back
+}
+```
+
+These return `Vec3` vectors in world space, useful for movement and orientation calculations:
+
+```rust
+fn movement_system(
+    input: Res<Input<KeyCode>>,
+    mut query: Query<&mut Transform, With<Player>>
+) {
+    for mut transform in query.iter_mut() {
+        if input.pressed(KeyCode::W) {
+            transform.translation += transform.forward() * 0.1;
+        }
+        if input.pressed(KeyCode::A) {
+            transform.translation += transform.left() * 0.1;
+        }
+    }
+}
+```
+
+### Builder Methods
+
+**Added in Bevy 0.6**
+
+Chain transform creation with builder methods:
+
+```rust
+let transform = Transform::from_xyz(0.0, 0.0, 10.0)
+    .with_scale(Vec3::splat(2.0))
+    .with_rotation(Quat::from_rotation_y(PI / 4.0));
+
+// Available methods:
+// - with_translation(Vec3)
+// - with_rotation(Quat)
+// - with_scale(Vec3)
+```
+
+Clean and expressive!
+
 ### Global Transforms
 
 The `GlobalTransform` component contains the world-space transform, taking parent transforms into account. It is automatically computed by Bevy.

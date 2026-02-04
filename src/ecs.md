@@ -136,7 +136,7 @@ fn system(mut query: Query<(&Position, &mut Velocity)>) {
 }
 ```
 
-**Bevy 0.3+ (improved ergonomics):**
+**Bevy 0.3-0.5 (improved ergonomics):**
 ```rust
 fn system(mut query: Query<(&Position, &mut Velocity)>) {
     // query.iter() is now a real iterator! No more &mut required
@@ -146,7 +146,49 @@ fn system(mut query: Query<(&Position, &mut Velocity)>) {
 }
 ```
 
-The 0.3 improvement removed the awkward `&mut` from iteration and made `query.iter()` return an actual iterator instead of a wrapper type.
+**Bevy 0.6 (immutable iteration on mutable queries):**
+```rust
+fn system(mut query: Query<&mut Player>) {
+    // Can iterate immutably without QuerySet!
+    for player in query.iter() {
+        // player is an immutable reference
+    }
+
+    // Or iterate mutably
+    for mut player in query.iter_mut() {
+        // player is a mutable reference
+    }
+}
+```
+
+Before 0.6, this required a QuerySet. Now mutable queries can be iterated immutably, eliminating the need for QuerySets in many cases.
+
+### Query Combinations
+
+**Added in Bevy 0.6**
+
+Iterate all combinations of N entities:
+
+```rust
+fn collision_system(query: Query<(&Transform, &Collider)>) {
+    // Check all pairs of entities for collisions
+    for [(t1, c1), (t2, c2)] in query.iter_combinations() {
+        // Each pair is checked exactly once
+        if check_collision(t1, c1, t2, c2) {
+            println!("Collision detected!");
+        }
+    }
+}
+
+fn gravity_system(mut query: Query<(&Transform, &mut Velocity, &Mass)>) {
+    // Calculate gravity between all pairs
+    for [(t1, mut v1, m1), (t2, mut v2, m2)] in query.iter_combinations_mut() {
+        apply_gravity(t1, &mut v1, m1, t2, &mut v2, m2);
+    }
+}
+```
+
+**Warning:** Time complexity grows exponentially! Use with care for large entity counts.
 
 ### Change Detection
 
@@ -380,6 +422,73 @@ fn system(world: &mut World, resources: &mut Resources) {
 ```
 
 Thread local systems have exclusive access to the World and Resources, and must run on the main thread.
+
+### SystemState
+
+**Added in Bevy 0.6**
+
+Use system params directly with a World without registering a system:
+
+```rust
+// Create a SystemState for the params you need
+let mut system_state: SystemState<(Res<AssetServer>, Query<&Transform>)> = 
+    SystemState::new(&mut world);
+
+// Get access to the params
+let (asset_server, query) = system_state.get(&world);
+
+// Use them just like in a system
+for transform in query.iter() {
+    // ...
+}
+```
+
+**Benefits:**
+- Access system params from non-system code
+- Same caching as regular systems (fast repeated access)
+- Eliminates need for costly abstractions like WorldCell
+- Perfect for direct World manipulation
+
+This is a game-changer for advanced World access patterns!
+
+### Sub Apps
+
+**Added in Bevy 0.6**
+
+Sub-apps enable separate app instances with their own schedules:
+
+```rust
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, AppLabel)]
+pub struct RenderApp;
+
+let mut render_app = App::empty();
+
+// Add render app as a sub-app
+app.add_sub_app(RenderApp, render_app, |app_world, render_app| {
+    // Execute logic here
+});
+
+// Later, access the sub-app
+app.sub_app_mut(RenderApp)
+    .add_system(render_system)
+    .add_system(another_render_system);
+```
+
+The new renderer uses this for strict separation between the main app and render app.
+
+### Hierarchy Functions
+
+**Added in Bevy 0.6**
+
+Convenient functions for managing entity hierarchies:
+
+```rust
+// Despawn all descendants (children, grandchildren, etc.)
+commands.entity(parent).despawn_descendants();
+
+// Remove specific children from an entity
+commands.entity(parent).remove_children(&[child1, child2]);
+```
 
 ## Other System Features
 

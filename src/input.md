@@ -31,26 +31,39 @@ fn system(mouse: Res<Input<MouseButton>>) {
 
 ## Gamepad Input
 
-**Added in Bevy 0.2**
+**Added in Bevy 0.2, Enhanced in Bevy 0.6**
 
 The Bevy Input plugin now has cross-platform support for most controllers thanks to the gilrs library!
 
+### Gamepads Resource
+
+**Added in Bevy 0.6**
+
+The `Gamepads` resource automatically maintains a collection of connected gamepads:
+
 ```rust
-fn button_system(
-    gamepads: Res<Vec<Gamepad>>, 
-    button_input: Res<Input<GamepadButton>>
-) {
+fn gamepad_system(gamepads: Res<Gamepads>) {
+    // Iterate all connected gamepads
     for gamepad in gamepads.iter() {
-        if button_input.just_pressed(GamepadButton(*gamepad, GamepadButtonType::RightTrigger)) {
-            println!("Pressed right trigger!");
-        }
+        println!("Gamepad {:?} is connected", gamepad);
     }
 }
 ```
 
-### Gamepad Detection
+### Button Input
 
-Connected gamepads are available in the `Vec<Gamepad>` resource. You can iterate over them to handle input from multiple controllers.
+```rust
+fn button_system(
+    gamepads: Res<Gamepads>, 
+    button_input: Res<Input<GamepadButton>>
+) {
+    for gamepad in gamepads.iter() {
+        if button_input.just_pressed(GamepadButton(*gamepad, GamepadButtonType::South)) {
+            println!("Button pressed on gamepad {:?}", gamepad);
+        }
+    }
+}
+```
 
 ### Button Types
 
@@ -87,7 +100,7 @@ This allows you to:
 
 ## Input Iterator Methods
 
-**Added in Bevy 0.2**
+**Added in Bevy 0.2, Enhanced in Bevy 0.6**
 
 New methods on `Input<T>` provide iterator access to input state:
 
@@ -109,6 +122,26 @@ fn system(keys: Res<Input<KeyCode>>) {
     }
 }
 ```
+
+### any_pressed()
+
+**Added in Bevy 0.6**
+
+Check if any of the given inputs are pressed:
+
+```rust
+fn system(input: Res<Input<KeyCode>>) {
+    if input.any_pressed([KeyCode::LShift, KeyCode::RShift]) {
+        println!("At least one shift key is pressed");
+    }
+    
+    if input.any_pressed([KeyCode::W, KeyCode::Up]) {
+        // Move forward
+    }
+}
+```
+
+This is useful for alternate key bindings!
 
 ## Input State
 
