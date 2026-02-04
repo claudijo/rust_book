@@ -1,0 +1,15 @@
+[book]
+title = "Bevy Game Engine Programming Guide"
+authors = ["claudijo"]
+language = "en"
+description = "An in-depth guide to the Bevy game engine, covering its evolution from version 0.1 onward"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+default-theme = "rust"
+git-repository-url = "https://github.com/bevyengine/bevy"
+additional-css = []
+additional-js = []
