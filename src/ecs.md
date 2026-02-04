@@ -400,31 +400,39 @@ fn main() {
 
 ## Commands
 
-Use Commands to queue up World and Resource changes, which will be applied at the end of the current Stage:
+Use Commands to queue up World and Resource changes, which will be applied at the end of the current Stage.
+
+**Bevy 0.5 Commands API:**
 
 ```rust
 fn system(mut commands: Commands) {
-    commands.spawn((Position(0.0), Velocity(1.0)));
+    // Spawn entity with bundle
+    let entity = commands.spawn_bundle((Position(0.0), Velocity(1.0))).id();
+    
+    // Spawn empty entity, then add components
+    commands.spawn()
+        .insert_bundle(MyBundle::default())
+        .insert(ExtraComponent);
+    
+    // Modify existing entity
+    commands.entity(entity)
+        .insert(NewComponent)
+        .remove::<OldComponent>();
+    
+    // Despawn entity
+    commands.entity(entity).despawn();
 }
 ```
 
-Commands can also be used alongside other types:
+**Changes from Bevy 0.4:**
+- `spawn()` no longer accepts parameters - use `spawn_bundle(bundle)` or `spawn().insert_bundle(bundle)`
+- `with(component)` → `insert(component)`
+- `insert_one(entity, component)` → `entity(entity).insert(component)`
+- `remove_one::<T>(entity)` → `entity(entity).remove::<T>()`
+- `current_entity()` → `id()` to get the spawned entity ID
+- Parameter changed back: `mut commands: Commands` (not `&mut`)
 
-```rust
-fn system(mut commands: Commands, time: Res<Time>, mut query: Query<&Position>) {
-    // do something
-}
-```
-
-**Bevy 0.4 Changes:**
-
-Commands changed from `mut commands: Commands` to `commands: &mut Commands`:
-
-```rust
-fn system(commands: &mut Commands, time: Res<Time>) {
-    commands.spawn((Position(0.0), Velocity(1.0)));
-}
-```
+The API is now consistent with the World API.
 
 ## Flexible System Parameters
 

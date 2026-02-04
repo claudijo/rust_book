@@ -28,6 +28,7 @@
 
 # Rendering
 
+- [Physically Based Rendering](./pbr.md)
 - [Render Graph](./render-graph.md)
 
 # Platforms

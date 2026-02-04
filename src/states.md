@@ -1,8 +1,14 @@
 # States
 
-**Added in Bevy 0.4**
+**Added in Bevy 0.4, Redesigned in Bevy 0.5**
 
 Bevy States allow you to organize your app into logical states and enable/disable systems according to the current state.
+
+## Bevy 0.5: States V2
+
+**Changed in Bevy 0.5**
+
+States were completely redesigned with a stack-based state machine model and direct integration with the new scheduler.
 
 ## Defining States
 
@@ -18,44 +24,68 @@ enum AppState {
 }
 ```
 
-## Adding States to Your App
+## Adding States to Your App (Bevy 0.5)
 
-Add a State resource with a default value:
-
+**Bevy 0.5:**
 ```rust
 fn main() {
     App::build()
         .add_plugins(DefaultPlugins)
-        .add_resource(State::new(AppState::Loading))
-        .add_stage_after(stage::UPDATE, "game_state", StateStage::<AppState>::default())
+        .add_state(AppState::Loading)  // Registers state and driver
+        .add_system_set(
+            SystemSet::on_enter(AppState::Menu)
+                .with_system(setup_menu.system())
+        )
+        .add_system_set(
+            SystemSet::on_update(AppState::Menu)
+                .with_system(menu_system.system())
+        )
+        .add_system_set(
+            SystemSet::on_exit(AppState::Menu)
+                .with_system(cleanup_menu.system())
+        )
         .run();
 }
 ```
 
-The `StateStage` is where state lifecycle systems run.
+**Changes from 0.4:**
+- `add_state(initial_state)` replaces manual State resource and StateStage setup
+- SystemSets replace on_state_enter/update/exit methods
+- More natural, composable API
+- Direct integration with the scheduler
 
-## State Lifecycle Events
+## System Sets for States
 
-Systems can be registered for different lifecycle events:
+Use `SystemSet` to group systems by state lifecycle:
 
 ```rust
 app
-    .on_state_enter("game_state", AppState::Menu, setup_menu.system())
-    .on_state_update("game_state", AppState::Menu, menu_system.system())
-    .on_state_exit("game_state", AppState::Menu, cleanup_menu.system())
-    .on_state_enter("game_state", AppState::InGame, setup_game.system())
-    .on_state_update("game_state", AppState::InGame, game_play.system());
+    // On enter: runs once when entering the state
+    .add_system_set(SystemSet::on_enter(AppState::InGame)
+        .with_system(setup_game.system())
+        .with_system(load_level.system())
+    )
+    // On update: runs every frame while in this state
+    .add_system_set(SystemSet::on_update(AppState::InGame)
+        .with_system(player_movement.system())
+        .with_system(enemy_ai.system())
+    )
+    // On exit: runs once when exiting the state
+    .add_system_set(SystemSet::on_exit(AppState::InGame)
+        .with_system(save_progress.system())
+        .with_system(cleanup.system())
+    );
 ```
 
 ### Lifecycle Events
 
 - **on_enter**: Runs once when first entering a state
-- **on_update**: Runs every frame while in this state (after enter/exit)
+- **on_update**: Runs every frame while in the state
 - **on_exit**: Runs once when exiting a state
 
 ## Changing States
 
-Queue a state change from within a system:
+Queue a state change from within a system (unchanged from 0.4):
 
 ```rust
 fn menu_system(
@@ -63,10 +93,32 @@ fn menu_system(
     keyboard: Res<Input<KeyCode>>
 ) {
     if keyboard.just_pressed(KeyCode::Return) {
-        state.set_next(AppState::InGame).unwrap();
+        state.set(AppState::InGame).unwrap();
     }
 }
 ```
+
+## Stack-Based State Machine
+
+**New in Bevy 0.5**
+
+States now work as a stack, enabling more complex state management:
+
+```rust
+// Push a new state onto the stack
+state.push(AppState::Paused).unwrap();
+
+// Pop the current state, returning to the previous one
+state.pop().unwrap();
+
+// Replace the current state
+state.set(AppState::Menu).unwrap();
+```
+
+This enables patterns like:
+- Pausing (push pause state, then pop to return)
+- Sub-menus (push sub-menu, pop when done)
+- Modal dialogs (push dialog state, pop when closed)
 
 ## State Change Behavior
 

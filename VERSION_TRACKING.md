@@ -378,19 +378,107 @@ This document tracks which content came from which Bevy version.
 
 ---
 
-## Bevy 0.5 - 0.18
+## Bevy 0.5 (April 6, 2021)
+
+**Source**: 
+- Release notes: https://bevyengine.org/news/bevy-0-5/
+- Migration guide: https://bevy.org/learn/migration-guides/0-4-to-0-5/
+
+**Status**: ✅ Core features integrated
+
+### New Chapters Added
+
+1. **Physically Based Rendering (PBR)** - StandardMaterial, textures, lighting, PBR principles
+
+### Major Updates to Existing Chapters
+
+1. **Events** - Simplified API with EventReader/EventWriter
+2. **States** - V2 stack-based state machine with SystemSets
+3. **Commands** - Complete API rework, consistent with World API
+4. **ECS** - Commands updated for 0.5
+
+### Key Features
+
+**PBR Rendering:**
+- StandardMaterial with base_color, roughness, metallic, reflectance, emissive
+- 5 texture types: base_color, normal_map, metallic_roughness, occlusion, emissive
+- Filament/Unreal/Disney-based techniques
+- Industry-standard workflow
+
+**Bevy ECS V2:**
+- Complete ECS core rewrite
+- Hybrid component storage
+- Archetype Graph
+- New parallel system executor
+- Reliable change detection
+- System labels and sets
+
+**Simplified Events:**
+- EventReader/EventWriter (single parameter)
+- Automatic state management
+- No more Local<EventReader>
+
+**States V2:**
+- Stack-based state machine (push/pop)
+- SystemSets for organization
+- Direct scheduler integration
+- More composable API
+
+**Commands API Rework:**
+- spawn() → spawn_bundle()
+- with() → insert()
+- entity(e).insert() / remove()
+- Parameter: mut commands: Commands
+- Consistent with World API
+
+**GLTF Improvements:**
+- PBR texture support (normal, metallic/roughness, occlusion, emissive)
+- Top-level Gltf asset type
+- Navigate GLTF contents
+
+### Breaking Changes
+
+- Commands: &mut Commands → mut commands: Commands
+- Commands API completely reworked
+- Timer uses Duration instead of f32
+- Events simplified (EventReader/EventWriter)
+- add_resource → insert_resource
+- TextBundle reworked for rich text
+- GLTF scenes need fragment (#Scene0)
+- States registration changed (add_state, SystemSets)
+- ChangedRes removed (use .is_changed())
+- Camera bundles renamed (PerspectiveCameraBundle, OrthographicCameraBundle)
+
+### Additional Features (Noted)
+
+- Rich text (multiple styled sections)
+- HIDPI text (crisp rendering)
+- 2D world space text
+- 3D orthographic camera
+- Orthographic scaling modes
+- Flexible camera bindings
+- Render layers
+- Sprite flipping
+- Color spaces
+- Wireframes
+- Window resize constraints
+- !Send tasks
+- Scene instance entity iteration
+
+---
+
+## Bevy 0.6 - 0.18
 
 **Status**: ⏳ Awaiting input
-
-Will be added when release notes are provided.
 
 ---
 
 ## Version History Summary
 
 - **Bevy 0.1**: Foundation (14 chapters, ~6,100 words)
-- **Bevy 0.2**: Integrated (18 chapters, ~9,000 words, 4 new, 9 updated)
-- **Bevy 0.3**: Integrated (20 chapters, ~13,000 words, 2 new, 8 major updates)
-- **Bevy 0.4**: Integrated (21 chapters, ~16,000 words, 2 new, 3 major updates)
-- **Bevy 0.5+**: Pending
+- **Bevy 0.2**: Integrated (18 chapters, ~9,000 words)
+- **Bevy 0.3**: Integrated (20 chapters, ~13,000 words)
+- **Bevy 0.4**: Integrated (21 chapters, ~16,000 words)
+- **Bevy 0.5**: Integrated (22 chapters, ~18,500 words, PBR + ECS V2)
+- **Bevy 0.6+**: Pending
 
