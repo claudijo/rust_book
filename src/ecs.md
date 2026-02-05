@@ -71,6 +71,40 @@ struct Marker;
 
 Use SparseSet for components that are frequently added and removed (like temporary status effects) or accessed rarely. The default Table storage is best for components that exist throughout an entity's lifetime and are accessed frequently.
 
+### Newtype Components
+
+Wrap types in components using the newtype pattern with Deref/DerefMut for ergonomic access:
+
+```rust
+#[derive(Component, Deref, DerefMut)]
+struct Score(i32);
+
+#[derive(Component, Deref, DerefMut)]
+struct Items(Vec<Item>);
+
+fn update_score(mut query: Query<&mut Score>) {
+    for mut score in query.iter_mut() {
+        // Access the inner i32 directly through deref
+        **score += 10;
+        
+        // Or use deref coercion
+        if *score > 100 {
+            println!("High score!");
+        }
+    }
+}
+
+fn manage_inventory(mut query: Query<&mut Items>) {
+    for mut items in query.iter_mut() {
+        // Vec methods available directly
+        items.push(Item::new("Sword"));
+        items.retain(|item| !item.is_broken());
+    }
+}
+```
+
+The `Deref` and `DerefMut` derives provide transparent access to the wrapped type, eliminating the need for `.0` field access. This keeps public APIs clean while maintaining type safety.
+
 ## Systems
 
 Systems are normal Rust functions that operate on the game world:
@@ -232,6 +266,46 @@ Common filters:
 - `Changed<T>` - Component T was added or modified this frame
 - `Added<T>` - Component T was just added
 
+### AnyOf Queries
+
+Query entities that have any of several components:
+
+```rust
+fn system(query: Query<AnyOf<(&Player, &Enemy)>>) {
+    for (player, enemy) in query.iter() {
+        // At least one is guaranteed to be Some
+        if let Some(player) = player {
+            println!("Found player");
+        }
+        if let Some(enemy) = enemy {
+            println!("Found enemy");
+        }
+    }
+}
+```
+
+`AnyOf` returns entities with Player but not Enemy, Enemy but not Player, or both. Each component in the tuple is wrapped in `Option`. This is useful for systems that handle multiple related types:
+
+```rust
+fn render_sprites(
+    query: Query<(
+        &Transform,
+        AnyOf<(&Sprite, &AnimatedSprite, &TiledSprite)>
+    )>
+) {
+    for (transform, (sprite, animated, tiled)) in query.iter() {
+        // Render whichever sprite type exists
+        if let Some(sprite) = sprite {
+            render_static_sprite(sprite, transform);
+        } else if let Some(animated) = animated {
+            render_animated_sprite(animated, transform);
+        } else if let Some(tiled) = tiled {
+            render_tiled_sprite(tiled, transform);
+        }
+    }
+}
+```
+
 You can create type aliases for reusable filter combinations:
 
 ```rust
@@ -280,6 +354,52 @@ fn collision_system(query: Query<(Entity, &Transform, &Collider)>) {
 
 Each pair is checked exactly once. Note that this is O(n²) - use spatial partitioning for large numbers of entities.
 
+### Custom Query Types
+
+Create reusable query bundles with WorldQuery derives:
+
+```rust
+#[derive(WorldQuery)]
+#[world_query(mutable)]
+struct PlayerQuery<'w> {
+    transform: &'w mut Transform,
+    velocity: &'w mut Velocity,
+    health: &'w mut Health,
+    stats: &'w PlayerStats,
+}
+
+fn move_players(mut players: Query<PlayerQuery>) {
+    for mut player in players.iter_mut() {
+        // Access all components through the player bundle
+        player.velocity.x += player.stats.speed;
+        player.transform.translation.x += player.velocity.x;
+        
+        if player.health.current <= 0.0 {
+            // Handle death
+        }
+    }
+}
+
+fn player_collision(mut players: Query<(Entity, PlayerQuery)>) {
+    for (entity, mut player) in players.iter_mut() {
+        // Entity ID available alongside components
+    }
+}
+```
+
+The `#[world_query(mutable)]` attribute enables mutable access. Custom queries reduce repetition and make code more maintainable when the same component sets appear across multiple systems.
+
+Read-only queries don't need the mutable attribute:
+
+```rust
+#[derive(WorldQuery)]
+struct EnemyQuery<'w> {
+    transform: &'w Transform,
+    ai: &'w AI,
+    health: &'w Health,
+}
+```
+
 ### Parallel Queries
 
 Distribute query work across multiple threads:
@@ -315,28 +435,64 @@ fn system(
 }
 ```
 
-### Conflicting Queries
+### Querying Specific Entities
 
-If you need overlapping mutable access, use QuerySet:
+Access multiple specific entities from a query:
 
 ```rust
-fn system(mut queries: QuerySet<(
-    QueryState<&mut Health>,
-    QueryState<(&mut Health, &Armor)>
+#[derive(Resource)]
+struct ImportantEntities {
+    player: Entity,
+    target: Entity,
+    camera: Entity,
+}
+
+fn system(
+    entities: Res<ImportantEntities>,
+    mut query: Query<&mut Transform>
+) {
+    // Query multiple entities at once
+    let [player_transform, target_transform, camera_transform] = 
+        query.many_mut([entities.player, entities.target, entities.camera]);
+    
+    // Now we have mutable access to all three simultaneously
+    player_transform.translation.x += 1.0;
+    camera_transform.look_at(target_transform.translation, Vec3::Y);
+}
+```
+
+`many_mut()` returns an array of mutable references, avoiding borrow checker conflicts. It panics if entities don't exist or overlap. Use `get_many_mut()` for a Result-based variant:
+
+```rust
+if let Ok([a, b, c]) = query.get_many_mut([entity_a, entity_b, entity_c]) {
+    // Safe access
+}
+```
+
+Immutable variants exist too: `many()` and `get_many()`.
+
+### Conflicting Queries
+
+If you need overlapping mutable access, use ParamSet:
+
+```rust
+fn system(mut queries: ParamSet<(
+    Query<&mut Health>,
+    Query<(&mut Health, &Armor)>
 )>) {
     // First query
-    for health in queries.q0().iter() {
+    for health in queries.p0().iter() {
         println!("Health: {}", health.current);
     }
     
     // Second query (overlaps with first)
-    for (mut health, armor) in queries.q1().iter_mut() {
+    for (mut health, armor) in queries.p1().iter_mut() {
         health.current += armor.regeneration;
     }
 }
 ```
 
-QuerySet ensures only one query is active at a time, preventing unsafe mutable aliasing while still allowing both queries in the same system.
+ParamSet ensures only one query is active at a time, preventing unsafe mutable aliasing while still allowing both queries in the same system.
 
 ## Resources
 
@@ -419,7 +575,14 @@ fn system(mut commands: Commands) {
 ### Modifying Entities
 
 ```rust
-fn system(mut commands: Commands, query: Query<Entity, With<Defeated>>) {
+// Example using user-defined marker components
+#[derive(Component)]
+struct Defeated;
+
+#[derive(Component)]
+struct Despawning;
+
+fn mark_defeated(mut commands: Commands, query: Query<Entity, With<Defeated>>) {
     for entity in query.iter() {
         commands.entity(entity)
             .insert(Despawning)
@@ -448,6 +611,22 @@ commands.entity(parent).despawn_descendants();
 commands.entity(parent).remove_children(&[child1, child2]);
 ```
 
+### Resource Initialization
+
+Initialize resources with their default values:
+
+```rust
+fn setup(mut commands: Commands) {
+    // Initialize a resource using Default
+    commands.init_resource::<GameConfig>();
+    
+    // Equivalent to:
+    // commands.insert_resource(GameConfig::default());
+}
+```
+
+This is convenient when you just need a resource initialized to its default state without constructing it explicitly.
+
 ### Why Commands?
 
 Commands are deferred because immediate changes would invalidate iterators and cause race conditions in parallel systems. By queuing changes and applying them at stage boundaries, Bevy maintains safety and performance.
@@ -463,6 +642,33 @@ Systems can accept any type implementing `SystemParam`:
 - `EventReader<T>`, `EventWriter<T>` - Event handling
 - `Option<Res<T>>` - Optional resources
 - `Res<Assets<T>>` - Access asset collections
+- `&World` - Read-only access to the entire world
+
+### Direct World Access
+
+Systems can access the entire World directly:
+
+```rust
+fn debug_system(world: &World) {
+    println!("Entity count: {}", world.entities().len());
+    
+    if let Some(time) = world.get_resource::<Time>() {
+        println!("Time: {:.2}s", time.elapsed_seconds());
+    }
+}
+```
+
+Note that `&World` conflicts with mutable queries. Use ParamSet to resolve:
+
+```rust
+fn system(mut set: ParamSet<(&World, Query<&mut Transform>)>) {
+    let entity_count = set.p0().entities().len();
+    
+    for mut transform in set.p1().iter_mut() {
+        transform.translation.x += 1.0;
+    }
+}
+```
 
 Parameters can be in any order:
 
@@ -476,6 +682,62 @@ fn system(
     // All valid regardless of order
 }
 ```
+
+## System Ordering
+
+Bevy runs systems in parallel when possible. Sometimes you need explicit ordering - one system must run before or after another:
+
+```rust
+fn update_velocity(mut query: Query<&mut Velocity>) {
+    // Update velocities based on input or AI
+}
+
+fn apply_velocity(mut query: Query<(&Velocity, &mut Transform)>) {
+    for (velocity, mut transform) in query.iter_mut() {
+        transform.translation += velocity.0;
+    }
+}
+
+fn main() {
+    App::new()
+        .add_system(update_velocity)
+        .add_system(apply_velocity.after(update_velocity))
+        .run();
+}
+```
+
+The `.after()` method ensures `apply_velocity` runs after `update_velocity` finishes. Use `.before()` for the opposite:
+
+```rust
+.add_system(physics.before(apply_velocity))
+```
+
+### System Labels
+
+For complex ordering, use explicit labels:
+
+```rust
+#[derive(SystemLabel)]
+enum GameSystem {
+    Input,
+    Logic,
+    Movement,
+    Rendering,
+}
+
+App::new()
+    .add_system(handle_input.label(GameSystem::Input))
+    .add_system(game_logic.label(GameSystem::Logic).after(GameSystem::Input))
+    .add_system(movement.label(GameSystem::Movement).after(GameSystem::Logic))
+    .add_system(render.label(GameSystem::Rendering).after(GameSystem::Movement))
+    .run();
+```
+
+Labels let multiple systems share the same ordering point. Any system labeled with `GameSystem::Logic` runs after all `GameSystem::Input` systems.
+
+### Ordering vs Parallelism
+
+Bevy parallelizes systems aggressively. Only add ordering when necessary - unnecessary constraints limit parallelism. Systems with no conflicts run in parallel automatically.
 
 ## System Chaining
 

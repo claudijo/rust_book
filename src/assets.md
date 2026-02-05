@@ -268,6 +268,111 @@ Bevy's asset system adapts to different platforms automatically through the `Ass
 
 You write the same code, and Bevy handles platform differences transparently.
 
+## Compressed Textures
+
+Large scenes contain hundreds of textures consuming gigabytes of memory. Compressed GPU textures dramatically reduce load times and memory usage while improving performance.
+
+### Why Compress Textures?
+
+Traditional image formats like PNG compress for storage but must decompress before the GPU uses them. This decompression is slow and the resulting textures consume large amounts of RAM. GPU-native compressed textures remain compressed in memory and decompress on-the-fly during rendering.
+
+Benefits:
+
+**Faster loading** - Compressed textures load 5-10x faster than PNG. A scene taking 13 seconds to load with PNG might load in 1.5 seconds with compressed textures.
+
+**Less memory** - Compressed textures use 50-80% less RAM. More textures fit in memory simultaneously.
+
+**Better performance** - GPUs read less data per texture access, improving frame rates. Bandwidth-limited scenes can see 10%+ performance gains.
+
+**Mipmaps included** - Compressed texture formats support mipmaps, providing smoother, less noisy rendering at distance.
+
+### Supported Formats
+
+Bevy supports multiple compressed texture formats:
+
+**.ktx2** - Khronos Texture format, widely supported
+**.dds** - DirectDraw Surface, common in game development
+**.basis** - Universal format that transcodes at runtime
+
+Enable these formats with Cargo features:
+
+```toml
+[dependencies.bevy]
+version = "0.7"
+features = ["ktx2", "dds", "basis-universal"]
+```
+
+### Using Compressed Textures
+
+Load compressed textures like any other asset:
+
+```rust
+fn load_textures(asset_server: Res<AssetServer>) {
+    let albedo = asset_server.load("textures/wall.ktx2");
+    let normal = asset_server.load("textures/wall_normal.ktx2");
+    let metallic_roughness = asset_server.load("textures/wall_mr.ktx2");
+}
+```
+
+The asset server detects the format automatically. Your material code doesn't change:
+
+```rust
+let material = materials.add(StandardMaterial {
+    base_color_texture: Some(albedo),
+    normal_map_texture: Some(normal),
+    metallic_roughness_texture: Some(metallic_roughness),
+    ..Default::default()
+});
+```
+
+### Format Support
+
+Different platforms support different compression formats:
+
+**ASTC** - Mobile devices (iOS, Android), newer desktop GPUs
+**BCn (BC1-BC7)** - Desktop, Xbox, PlayStation
+**ETC2** - Mobile devices, OpenGL ES 3.0+
+
+Universal formats like ETC1S and UASTC transcode to platform-specific formats at load time, providing compatibility across all platforms with a single asset file.
+
+### Creating Compressed Textures
+
+Use texture compression tools to create compressed assets:
+
+**basisu** - Basis Universal compressor, creates .basis files
+**ktxtools** - Create .ktx2 from various sources
+**texconv** - Microsoft's texture conversion tool for .dds
+
+Example with basisu:
+
+```bash
+basisu -mipmap -ktx2 input.png -output_file output.ktx2
+```
+
+This creates a compressed KTX2 file with mipmaps from a PNG source.
+
+### When to Use Compression
+
+**Large scenes** - Many textures benefit greatly from compression.
+
+**Memory-constrained platforms** - Mobile devices, web, older hardware.
+
+**Bandwidth-limited rendering** - Complex scenes with many texture samples per frame.
+
+**Distribution** - Smaller downloads when shipping games.
+
+**Don't compress** when texture quality is critical and you have memory/bandwidth to spare, or when working with procedurally generated textures that don't benefit from compression.
+
+### Performance Considerations
+
+Compressed textures are almost always faster than uncompressed:
+- Faster loading from disk
+- Less memory bandwidth during rendering  
+- More textures cached in GPU memory
+- Mipmaps improve rendering quality and speed
+
+The only cost is initial compression time during asset creation, which is a one-time offline process.
+
 ## Best Practices
 
 **Load assets early** - Start loading during a loading screen or splash screen. Don't wait until you need an asset to start loading it.

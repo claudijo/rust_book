@@ -78,6 +78,66 @@ fn player_movement(
 
 Flipping is efficient - no texture duplication or additional GPU memory. Perfect for character facing directions.
 
+## Sprite Anchors
+
+Sprite anchors control the pivot point for positioning and rotation. By default, sprites anchor at their center. Change this to position sprites relative to specific points:
+
+```rust
+commands.spawn(SpriteBundle {
+    texture: asset_server.load("platform.png"),
+    sprite: Sprite {
+        anchor: Anchor::BottomLeft,  // Anchor at bottom-left corner
+        ..Default::default()
+    },
+    transform: Transform::from_xyz(0.0, 0.0, 0.0),
+    ..Default::default()
+});
+```
+
+Available anchor presets:
+
+- `Anchor::Center` (default) - Sprite centers on the transform position
+- `Anchor::TopLeft`, `Anchor::TopRight` - Align to corners
+- `Anchor::BottomLeft`, `Anchor::BottomRight` - Align to bottom corners
+- `Anchor::CenterLeft`, `Anchor::CenterRight` - Align to sides
+- `Anchor::TopCenter`, `Anchor::BottomCenter` - Align to top/bottom edges
+
+Custom anchors use normalized coordinates:
+
+```rust
+sprite.anchor = Anchor::Custom(Vec2::new(-0.5, -0.5));  // Bottom-left
+sprite.anchor = Anchor::Custom(Vec2::new(0.0, 0.0));    // Center
+sprite.anchor = Anchor::Custom(Vec2::new(0.5, 0.5));    // Top-right
+```
+
+Values range from -0.5 (left/bottom) to 0.5 (right/top).
+
+### Anchor Use Cases
+
+**UI elements** - Anchor UI sprites to screen corners or edges:
+
+```rust
+// Health bar anchored to top-left
+sprite.anchor = Anchor::TopLeft;
+transform.translation = Vec3::new(10.0, -10.0, 0.0);
+```
+
+**Platformer tiles** - Anchor platforms at their bottom for precise placement:
+
+```rust
+sprite.anchor = Anchor::BottomCenter;
+```
+
+**Rotation pivots** - Control where sprites rotate around:
+
+```rust
+// Rotate around bottom center (useful for characters)
+sprite.anchor = Anchor::BottomCenter;
+transform.rotate_z(angle);
+```
+
+The anchor affects both positioning and rotation. A sprite anchored at `BottomLeft` rotates around its bottom-left corner.
+
 ## Sprite Sheets
 
 Sprite sheets pack multiple images into a single texture. This reduces draw calls and improves performance. Games use sprite sheets for animations, tile sets, and UI elements.

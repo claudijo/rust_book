@@ -82,7 +82,33 @@ fn create_triangle(mut meshes: ResMut<Assets<Mesh>>) {
 }
 ```
 
-Meshes support custom vertex attributes beyond position, normal, and UV. Add vertex colors, bone weights, or any per-vertex data your shader needs.
+### Flexible Vertex Layouts
+
+Meshes support custom vertex attributes beyond position, normal, and UV. Bevy's shader system automatically specializes based on what attributes your mesh provides.
+
+This flexibility means:
+
+**Materials work with any mesh** - StandardMaterial and custom materials automatically adapt to whatever vertex attributes are available. Missing attributes degrade gracefully.
+
+**Custom attributes supported** - Add vertex colors, bone weights, tangents, or any per-vertex data:
+
+```rust
+// Add vertex colors
+mesh.insert_attribute(
+    Mesh::ATTRIBUTE_COLOR,
+    vec![[1.0, 0.0, 0.0, 1.0]; vertex_count]  // RGBA
+);
+
+// Add custom attribute for special effects
+mesh.insert_attribute(
+    MeshVertexAttribute::new("VertexMetallic", 2988540917, VertexFormat::Float32),
+    vec![0.5f32; vertex_count]
+);
+```
+
+**Shaders specialize automatically** - Bevy compiles shader variants based on mesh vertex layouts. A shader using vertex colors only compiles that path when rendering meshes with colors.
+
+This system enables skeletal animation (bone weights and indices), custom rendering effects, and efficient mesh handling without hardcoded attribute requirements.
 
 ## GLTF Models
 
@@ -209,6 +235,84 @@ commands.spawn(SpotLightBundle {
 });
 ```
 
+### Unlimited Point Lights
+
+Bevy uses clustered forward rendering to efficiently handle many lights. On platforms with storage buffer support (everything except WebGL), scenes can have thousands of point lights:
+
+```rust
+fn spawn_many_lights(mut commands: Commands) {
+    for x in -50..50 {
+        for z in -50..50 {
+            commands.spawn(PointLightBundle {
+                point_light: PointLight {
+                    intensity: 500.0,
+                    radius: 5.0,
+                    color: Color::rgb(
+                        rand::random(),
+                        rand::random(),
+                        rand::random(),
+                    ),
+                    ..Default::default()
+                },
+                transform: Transform::from_xyz(
+                    x as f32 * 2.0,
+                    1.0,
+                    z as f32 * 2.0,
+                ),
+                ..Default::default()
+            });
+        }
+    }
+}
+```
+
+Bevy automatically clusters lights spatially, calculating which lights affect each screen region. This enables scenes with 10,000+ lights while maintaining high performance.
+
+### Clustered Rendering Configuration
+
+Fine-tune light clustering for your scene:
+
+```rust
+use bevy::pbr::ClusterConfig;
+
+commands.insert_resource(ClusterConfig::FixedZ {
+    total: 4096,     // Total light clusters
+    z_slices: 24,    // Depth slices
+    z_config: Default::default(),
+});
+```
+
+Configuration options:
+
+**FixedZ** - Dynamic X/Y clusters, fixed Z slices. Adapts to light distribution automatically. Best for most scenes.
+
+**Fixed** - Fixed cluster counts for all dimensions. Use when you know optimal cluster layout.
+
+**Single** - One cluster for all lights. Use with very few lights.
+
+**None** - Disable clustering. Use when you control light assignment manually.
+
+The clustering system detects changes and only recalculates when lights move, optimizing CPU usage.
+
+### Light Visibility
+
+Toggle lights on and off with the Visibility component:
+
+```rust
+fn toggle_lights(
+    keyboard: Res<Input<KeyCode>>,
+    mut lights: Query<&mut Visibility, With<PointLight>>
+) {
+    if keyboard.just_pressed(KeyCode::L) {
+        for mut visibility in lights.iter_mut() {
+            visibility.is_visible = !visibility.is_visible;
+        }
+    }
+}
+```
+
+Invisible lights don't contribute to rendering, saving GPU time. Use this for day/night cycles, power-off states, or performance optimization.
+
 ## Cameras
 
 3D scenes need a camera to define the viewpoint:
@@ -254,6 +358,112 @@ commands.spawn(Camera3dBundle {
 ```
 
 Orthographic is useful for strategy games, editors, or artistic styles.
+
+### Render To Texture
+
+Cameras can render to textures instead of windows, enabling mirrors, split-screen, portals, and 2D UI in 3D space:
+
+```rust
+fn setup_render_texture(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+) {
+    // Create a texture to render into
+    let size = Extent3d {
+        width: 512,
+        height: 512,
+        ..Default::default()
+    };
+    
+    let mut image = Image {
+        texture_descriptor: TextureDescriptor {
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Bgra8UnormSrgb,
+            usage: TextureUsages::TEXTURE_BINDING
+                | TextureUsages::COPY_DST
+                | TextureUsages::RENDER_ATTACHMENT,
+        },
+        ..Default::default()
+    };
+    
+    let image_handle = images.add(image);
+    
+    // Camera renders to this texture
+    commands.spawn(Camera3dBundle {
+        camera: Camera {
+            target: RenderTarget::Image(image_handle.clone()),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+}
+```
+
+The current implementation is low-level, often requiring custom render graph nodes. Future versions will provide higher-level APIs for common render-to-texture scenarios. See the `render_to_texture` example for complete implementation details.
+
+## Compute Shaders
+
+Compute shaders perform general-purpose GPU computation outside the traditional rendering pipeline. Use them for physics simulations, particle systems, procedural generation, or any parallel computation that benefits from GPU acceleration.
+
+Bevy's compute shader support includes hot reloading, shader imports, and shader defs just like regular shaders:
+
+```wgsl
+#import "shaders/common.wgsl"
+
+@group(0) @binding(0) var<storage, read> input_data: array<f32>;
+@group(0) @binding(1) var<storage, read_write> output_data: array<f32>;
+
+@compute @workgroup_size(8, 8, 1)
+fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
+    let index = invocation_id.x + invocation_id.y * 256u;
+    
+    // Shader defs can be configured at runtime
+    #ifdef DOUBLE_VALUE
+        output_data[index] = input_data[index] * 2.0;
+    #else
+        output_data[index] = input_data[index];
+    #endif
+}
+```
+
+### Setting Up Compute Pipelines
+
+Create a compute pipeline similar to render pipelines:
+
+```rust
+fn setup_compute(
+    mut commands: Commands,
+    mut pipelines: ResMut<Assets<ComputePipeline>>,
+    shader_server: Res<AssetServer>
+) {
+    let shader = shader_server.load("shaders/compute.wgsl");
+    
+    let pipeline = pipelines.add(ComputePipeline {
+        shader,
+        shader_defs: vec!["DOUBLE_VALUE".to_string()],
+        entry_point: "main".into(),
+    });
+}
+```
+
+Shader defs enable runtime pipeline specialization. Change defs to compile different shader variants dynamically.
+
+### Use Cases
+
+**Physics simulation** - Calculate forces and update positions on the GPU.
+
+**Particle systems** - Update thousands of particles in parallel.
+
+**Procedural generation** - Generate terrain, textures, or meshes on the GPU.
+
+**Image processing** - Apply filters, effects, or analysis to textures.
+
+**Pathfinding** - Compute navigation fields or flow maps.
+
+Compute shaders excel at data-parallel operations where thousands of work items execute the same code on different data. The GPU's massively parallel architecture can outperform CPUs by orders of magnitude for suitable workloads.
 
 ## Anti-Aliasing
 
@@ -331,24 +541,14 @@ fn camera_follow(
 }
 ```
 
-**Billboards** - Make sprites always face the camera:
+
+**Simple rotation** - Spin objects continuously:
 
 ```rust
-fn billboard(
-    camera: Query<&Transform, With<Camera3d>>,
-    mut billboards: Query<&mut Transform, (With<Billboard>, Without<Camera3d>)>
-) {
-    if let Ok(camera_transform) = camera.get_single() {
-        for mut transform in billboards.iter_mut() {
-            transform.look_at(camera_transform.translation, Vec3::Y);
-        }
-    }
-}
-```
+// First, define a marker component for objects that should spin
+#[derive(Component)]
+struct Spinning;
 
-**Simple rotation** - Spin objects:
-
-```rust
 fn rotate_objects(time: Res<Time>, mut query: Query<&mut Transform, With<Spinning>>) {
     for mut transform in query.iter_mut() {
         transform.rotate_y(time.delta_seconds());

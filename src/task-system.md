@@ -25,6 +25,10 @@ Separating work by type prevents I/O operations from blocking compute tasks and 
 Distribute query iteration across threads:
 
 ```rust
+// Example with user-defined marker component
+#[derive(Component)]
+struct Moving;
+
 fn parallel_movement(
     pool: Res<ComputeTaskPool>,
     mut query: Query<&mut Transform, With<Moving>>

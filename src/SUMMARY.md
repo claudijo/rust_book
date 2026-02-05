@@ -13,6 +13,7 @@
 
 - [2D Features](./2d-features.md)
 - [3D Features](./3d-features.md)
+- [Animation](./animation.md)
 - [Transforms](./transforms.md)
 
 # Core Systems

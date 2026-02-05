@@ -2,6 +2,31 @@
 
 ## Core Principles
 
+### 0. ABSOLUTE ACCURACY - NO HALLUCINATIONS
+**THIS IS THE MOST IMPORTANT RULE**
+
+- **NEVER invent features, components, or APIs that don't exist in Bevy**
+- **ONLY document what is explicitly mentioned in the provided release notes and migration guides**
+- If you're unsure whether a feature exists, DO NOT include it
+- If you want to illustrate a pattern, use ONLY components and types that are confirmed to exist
+- When writing examples, verify every component name, every method, every type against the source material
+- Common hallucination traps to avoid:
+  - Inventing marker components (like `Billboard`, `Spinning`, etc.)
+  - Assuming features exist based on common game engine patterns
+  - Creating API methods that "should" exist but don't
+  - Adding convenience wrappers that haven't been implemented
+
+**Verification checklist before adding ANY code example:**
+- [ ] Is this component/type mentioned in the release notes or migration guide?
+- [ ] Is this method/function explicitly documented in the source material?
+- [ ] Am I making assumptions about what "probably" exists?
+- [ ] Can I trace this back to a specific section in the provided documentation?
+
+**If you cannot verify something exists, either:**
+1. Search the source material explicitly
+2. Use generic placeholder names with clear comments
+3. Omit the example entirely
+
 ### 1. Focus on Current, Best Practices
 - Document only the latest API and approaches
 - Remove all deprecated content

@@ -86,47 +86,92 @@ Spatial audio creates immersive experiences by making sounds appear to come from
 
 ## Audio Sinks
 
-For more control over playing audio, use audio sinks:
+For more control over playing audio, use audio sinks. When you play audio, you receive a weak handle. Get the sink to control playback:
 
 ```rust
-fn advanced_audio_control(
+#[derive(Resource)]
+struct BackgroundMusic(Handle<AudioSink>);
+
+fn setup_music(
+    mut commands: Commands,
     asset_server: Res<AssetServer>,
     audio: Res<Audio>,
-    mut sinks: ResMut<Assets<AudioSink>>
+    audio_sinks: Res<Assets<AudioSink>>
 ) {
-    let handle = audio.play(asset_server.load("music.ogg"));
+    let music = asset_server.load("theme.ogg");
+    let weak_handle = audio.play(music);
     
-    if let Some(sink) = sinks.get_mut(&handle) {
-        sink.set_volume(0.5);
-        sink.pause();
-        sink.play();
-        sink.stop();
-    }
+    // Upgrade to strong handle for persistent control
+    let handle = audio_sinks.get_handle(weak_handle);
+    commands.insert_resource(BackgroundMusic(handle));
 }
 ```
 
-Sinks provide runtime control: pause, resume, stop, adjust volume, and check playback state.
+### Controlling Playback
 
-## Audio Events
-
-React to audio state changes:
+Control audio through the sink:
 
 ```rust
-fn handle_audio_events(mut events: EventReader<AudioEvent>) {
-    for event in events.iter() {
-        match event {
-            AudioEvent::Started(id) => {
-                println!("Audio {} started playing", id);
-            }
-            AudioEvent::Finished(id) => {
-                println!("Audio {} finished", id);
-            }
+fn control_music(
+    music: Res<BackgroundMusic>,
+    keyboard: Res<Input<KeyCode>>,
+    audio_sinks: Res<Assets<AudioSink>>
+) {
+    if let Some(sink) = audio_sinks.get(&music.0) {
+        if keyboard.just_pressed(KeyCode::P) {
+            sink.pause();
+        }
+        
+        if keyboard.just_pressed(KeyCode::R) {
+            sink.play();  // Resume playback
         }
     }
 }
 ```
 
-Events enable synchronized behavior: starting animations when audio begins, triggering effects when sounds finish, or managing audio resource pools.
+The release notes show `.pause()` and `.play()` methods for controlling playback.
+
+### Volume Control
+
+Adjust volume dynamically:
+
+```rust
+fn adjust_volume(
+    music: Res<BackgroundMusic>,
+    keyboard: Res<Input<KeyCode>>,
+    mut audio_sinks: ResMut<Assets<AudioSink>>
+) {
+    if let Some(sink) = audio_sinks.get_mut(&music.0) {
+        if keyboard.pressed(KeyCode::Up) {
+            sink.set_volume(sink.volume() + 0.01);
+        }
+        if keyboard.pressed(KeyCode::Down) {
+            sink.set_volume((sink.volume() - 0.01).max(0.0));
+        }
+    }
+}
+```
+
+### Speed Control
+
+Change playback speed for effects:
+
+```rust
+fn change_speed(
+    audio_sinks: Res<Assets<AudioSink>>,
+    handle: &Handle<AudioSink>
+) {
+    if let Some(sink) = audio_sinks.get(handle) {
+        sink.set_speed(2.0);   // Double speed
+        sink.set_speed(0.5);   // Half speed
+        sink.set_speed(1.0);   // Normal speed
+    }
+}
+```
+
+Speed control enables slow-motion effects, fast-forward narration, or pitch-shifted sound effects.
+
+The release notes confirm these AudioSink control methods: `.pause()`, `.play()`, `.set_volume()`, `.volume()`, and `.set_speed()`. Consult the Bevy API documentation for additional AudioSink methods.
 
 ## Best Practices
 

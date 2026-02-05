@@ -118,16 +118,29 @@ window.set_mode(WindowMode::Fullscreen);            // Native fullscreen
 
 Borderless fullscreen is fastest to switch and works well for most games. Exclusive fullscreen may have lower latency but takes longer to alt-tab.
 
-### VSync
+### Present Mode
 
-Control vertical synchronization:
+Control how frames are presented to the screen:
 
 ```rust
-window.set_vsync(true);   // Cap FPS to monitor refresh rate
-window.set_vsync(false);  // Uncapped FPS
+use bevy::window::PresentMode;
+
+window.set_present_mode(PresentMode::Fifo);       // VSync enabled
+window.set_present_mode(PresentMode::Immediate);  // No VSync, immediate presentation
+window.set_present_mode(PresentMode::Mailbox);    // Low latency with VSync
 ```
 
-VSync prevents screen tearing but may add input latency. Competitive games often disable it.
+Present modes control screen tearing and latency:
+
+**Fifo** (VSync) - Caps FPS to monitor refresh rate, prevents tearing, may add latency.
+
+**Immediate** - No synchronization, maximum FPS, may cause tearing.
+
+**Mailbox** - Similar to VSync but replaces queued frames for lower latency.
+
+**AutoVsync** / **AutoNoVsync** - Platform-dependent defaults.
+
+Competitive games often use Immediate for lowest latency. Most games use Fifo or Mailbox.
 
 ### Decorations
 
@@ -297,6 +310,92 @@ Some features like fullscreen require browser APIs and user interaction.
 
 Mobile platforms use fullscreen by default. Window resize events reflect orientation changes and system UI visibility.
 
+## Power Saving Modes
+
+By default, Bevy updates as fast as possible (limited by present mode). This maximizes responsiveness but consumes power continuously. For applications that don't need constant updates, configure power-saving modes:
+
+```rust
+use bevy::winit::{WinitSettings, UpdateMode};
+use std::time::Duration;
+
+fn main() {
+    App::new()
+        .insert_resource(WinitSettings {
+            focused_mode: UpdateMode::Reactive {
+                max_wait: Duration::from_millis(100),
+            },
+            unfocused_mode: UpdateMode::ReactiveLowPower {
+                max_wait: Duration::from_secs(1),
+            },
+        })
+        .add_plugins(DefaultPlugins)
+        .run();
+}
+```
+
+### Update Modes
+
+**Continuous** - Update constantly, as fast as possible. Default for games. Maximum responsiveness, highest power usage.
+
+```rust
+UpdateMode::Continuous
+```
+
+**Reactive** - Update on window events, redraw requests, or after a timeout. Good for editor tools or applications with periodic updates.
+
+```rust
+UpdateMode::Reactive {
+    max_wait: Duration::from_millis(100),  // Update at least every 100ms
+}
+```
+
+**ReactiveLowPower** - Update only on user input or redraw requests. Best for battery life. Perfect for UI-heavy applications that don't animate constantly.
+
+```rust
+UpdateMode::ReactiveLowPower {
+    max_wait: Duration::from_secs(1),  // Update at least every second
+}
+```
+
+### Focus-Based Power Saving
+
+Configure different modes for focused and unfocused windows:
+
+```rust
+fn setup_power_saving(mut commands: Commands) {
+    commands.insert_resource(WinitSettings {
+        // Responsive when focused
+        focused_mode: UpdateMode::Continuous,
+        
+        // Save power when unfocused
+        unfocused_mode: UpdateMode::ReactiveLowPower {
+            max_wait: Duration::from_secs(10),
+        },
+    });
+}
+```
+
+This conserves resources when your application is in the background while maintaining responsiveness when active.
+
+### When to Use Power Saving
+
+**Use Continuous for:**
+- Fast-paced games
+- Real-time simulations
+- Constant animation
+
+**Use Reactive for:**
+- Editor tools
+- Turn-based games
+- Applications with periodic updates
+
+**Use ReactiveLowPower for:**
+- Menu screens
+- UI-heavy applications
+- Tools that respond only to input
+
+Power saving significantly reduces CPU and GPU usage. A game using ReactiveLowPower on menus can drop from 60 FPS continuous rendering to updating only when the player interacts.
+
 ## Best Practices
 
 **Use change detection** - Only update window properties when necessary:
@@ -308,7 +407,7 @@ fn update_window(
 ) {
     if settings.is_changed() {
         let window = windows.get_primary_mut().unwrap();
-        window.set_vsync(settings.vsync);
+        window.set_present_mode(settings.present_mode);
     }
 }
 ```

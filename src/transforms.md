@@ -225,20 +225,6 @@ fn orbit(time: Res<Time>, mut query: Query<&mut Transform, With<Orbiter>>) {
 }
 ```
 
-**Billboard sprites** that always face the camera:
-
-```rust
-fn billboard_sprites(
-    camera: Query<&Transform, With<Camera>>,
-    mut sprites: Query<&mut Transform, (With<Billboard>, Without<Camera>)>
-) {
-    if let Ok(camera_transform) = camera.get_single() {
-        for mut sprite_transform in sprites.iter_mut() {
-            sprite_transform.look_at(camera_transform.translation, Vec3::Y);
-        }
-    }
-}
-```
 
 ## Design Philosophy
 
