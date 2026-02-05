@@ -1,53 +1,33 @@
 # Introduction
 
-After months of work, Bevy Engine is here!
+This book provides comprehensive coverage of Bevy's features, design patterns, and best practices, covering Bevy up to version 0.7 with a focus on current, practical usage.
 
-**Bevy is a refreshingly simple data-driven game engine and app framework built in Rust. It is free and open-source forever!**
+## About This Book
 
-## Design Goals
+This book is created and maintained by Claudijo Borovic, with AI assistance for content generation and organization. The content is based on systematic analysis of official Bevy release notes.
 
-- **Capable**: Offer a complete 2D and 3D feature set
-- **Simple**: Easy for newbies to pick up, but infinitely flexible for power users
-- **Data Focused**: Data-oriented architecture using the Entity Component System paradigm
-- **Modular**: Use only what you need. Replace what you don't like
-- **Fast**: App logic should run quickly, and when possible, in parallel
-- **Productive**: Changes should compile quickly ... waiting isn't fun
+The book is actively maintained and will continue to grow as new Bevy versions are released.
 
-## Key Features
+### How to Contribute
 
-### Bevy ECS
-A custom Entity Component System with unrivaled usability and blisteringly-fast performance.
+Found an error or have suggestions? Please open an issue on the book's GitHub repository:
 
-### Render Graphs
-Easily build your own multi-threaded render pipelines using Render Graph nodes.
+[https://github.com/claudijo/rust_book](https://github.com/claudijo/rust_book)
 
-### Bevy UI
-A custom ECS-driven UI framework built specifically for Bevy.
+Your feedback helps improve the book for everyone!
 
-### Productive Compile Times
-Expect changes to compile in ~0.8-3.0 seconds with the "fast compiles" config.
+### Supporting Bevy
 
-## General Purpose Features
+If you find this book valuable, consider supporting the Bevy Foundation directly. All donations help fund Bevy's continued development:
 
-- **Cross Platform**: Windows, MacOS, and Linux (with planned support for mobile and web)
-- **3D**: Lights, meshes, textures, MSAA, and GLTF loading
-- **Sprites**: Render individual images as sprites, render from sprite sheets, and dynamically generate new sprite sheets
-- **Assets**: An extensible, event driven asset system that loads assets asynchronously in background threads
-- **Scenes**: Save ECS Worlds to human-readable scene files and load scene files into ECS Worlds
-- **Plugins**: All engine and app features are implemented as modular plugins
-- **Sound**: Load audio files as assets and play them from within systems
-- **Multiple Render Backends**: Vulkan, DirectX 12, and Metal (with more on the way thanks to wgpu)
-- **Data Driven Shaders**: Easily bind ECS components directly to shader uniforms
-- **Hot Asset Reloading**: Automatically reload changes to assets at runtime without recompiles or restarts
-- **Events**: Efficiently consume and produce Events from within ECS systems
-- **Properties**: Dynamically get and set component fields using a string version of their names
-- **Hierarchical Transforms**: Create parent-child relationships between entities that propagate Transforms down the hierarchy
+[https://bevy.org/donate/](https://bevy.org/donate/)
 
-## Current State
+### License
 
-Bevy is in the "prototyping" phase: features are missing, APIs will change, and documentation is sparse. It's not yet recommended for serious projects unless you're willing to deal with gaps and instability.
+Copyright © 2026 Claudijo Borovic
 
-## Getting Started
+This book is licensed under the [MIT License](https://opensource.org/licenses/MIT).
 
-Check out the Quick Start Guide to dive in, or continue reading to learn about what Bevy offers today.
+You are free to use, copy, modify, and distribute this work, including for commercial purposes, as long as you include the copyright notice and license text.
+
 

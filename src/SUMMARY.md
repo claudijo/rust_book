@@ -1,6 +1,7 @@
 # Summary
 
 [Introduction](./introduction.md)
+[What is Bevy?](./what-is-bevy.md)
 
 # Bevy Fundamentals
 
