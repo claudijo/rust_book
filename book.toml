@@ -9,7 +9,7 @@ src = "src"
 build-dir = "book"
 
 [output.html]
-default-theme = "rust"
+default-theme = "ayu"
 git-repository-url = "https://github.com/bevyengine/bevy"
 additional-css = []
 additional-js = []
