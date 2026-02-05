@@ -1,136 +1,231 @@
 # Windows
 
-Bevy provides a backend-agnostic windowing API.
+Bevy's window system abstracts platform differences, letting you create and manage windows with a consistent API across desktop, web, and mobile.
 
-## Creating Windows
+## Window Creation
 
 Windows are created automatically when using the default plugins:
 
 ```rust
 fn main() {
-    App::build()
+    App::new()
         .add_plugins(DefaultPlugins)
         .run();
 }
 ```
 
-## Window Configuration
+This creates a single window with default settings: 1280x720 resolution, a generic title, and standard decorations.
 
-You can configure the initial window settings:
+## Initial Configuration
+
+Customize the window before it opens using WindowDescriptor:
 
 ```rust
 fn main() {
-    App::build()
-        .add_plugins(DefaultPlugins)
-        .add_resource(WindowDescriptor {
+    App::new()
+        .insert_resource(WindowDescriptor {
             title: "My Game".to_string(),
-            width: 800.0,
-            height: 600.0,
-            vsync: true,
+            width: 1920.0,
+            height: 1080.0,
             resizable: true,
             ..Default::default()
         })
+        .add_plugins(DefaultPlugins)
         .run();
 }
 ```
 
-## Dynamic Window Settings
+This sets properties before window creation. Some properties can be changed later, others are fixed at creation time.
 
-**Added in Bevy 0.3**
+## Accessing Windows
 
-Prior to 0.3, window settings could only be set once at app startup. Bevy 0.3 added the ability to dynamically modify window properties at runtime:
-
-```rust
-fn change_title(time: Res<Time>, mut windows: ResMut<Windows>) {
-    let window = windows.get_primary_mut().unwrap();
-    window.set_title(format!(
-        "Seconds since startup: {}", 
-        time.seconds_since_startup()
-    ));
-}
-```
-
-### Available Dynamic Settings
-
-You can change these properties at runtime:
-- **Title**: `window.set_title()`
-- **Resolution**: `window.set_resolution()`
-- **Vsync**: `window.set_vsync()`
-- **Resizable**: `window.set_resizable()`
-- **Decorations**: `window.set_decorations()`
-- **Cursor visibility**: `window.set_cursor_visibility()`
-- **Cursor lock**: `window.set_cursor_lock_mode()`
-- **Position**: `window.set_position()`
-- **Maximized**: `window.set_maximized()`
-- **Minimized**: `window.set_minimized()`
-- **Mode**: `window.set_mode()` (windowed, fullscreen, etc.)
-
-### Multiple Windows
+Query the Windows resource to access window state:
 
 ```rust
-fn system(mut windows: ResMut<Windows>) {
-    // Access the primary window
-    if let Some(window) = windows.get_primary_mut() {
-        window.set_title("Primary Window");
-    }
-    
-    // Access by ID
-    if let Some(window) = windows.get_mut(window_id) {
-        window.set_title("Secondary Window");
+fn inspect_window(windows: Res<Windows>) {
+    if let Some(window) = windows.get_primary() {
+        println!("Window size: {}x{}", window.width(), window.height());
+        println!("Window is focused: {}", window.is_focused());
     }
 }
 ```
 
-## Window Events
+Most games work with a single primary window. Multi-window support exists for editor tools or complex applications.
 
-React to window events:
+## Runtime Changes
+
+Modify window properties while your game runs:
 
 ```rust
-fn window_events(mut events: EventReader<WindowEvent>) {
-    for event in events.iter() {
-        match event {
-            WindowEvent::Resized { width, height, .. } => {
-                println!("Window resized to {}x{}", width, height);
+fn toggle_fullscreen(
+    keyboard: Res<Input<KeyCode>>,
+    mut windows: ResMut<Windows>
+) {
+    if keyboard.just_pressed(KeyCode::F11) {
+        let window = windows.get_primary_mut().unwrap();
+        
+        match window.mode() {
+            WindowMode::Windowed => {
+                window.set_mode(WindowMode::BorderlessFullscreen);
             }
-            WindowEvent::Focused(focused) => {
-                println!("Window focus: {}", focused);
+            _ => {
+                window.set_mode(WindowMode::Windowed);
             }
-            _ => {}
         }
     }
 }
 ```
 
-## Platform-Specific Features
+## Window Properties
 
-### Mouse Capture
+### Title
 
-**Added in Bevy 0.3**
+Update the title bar text:
 
 ```rust
-fn capture_mouse(mut windows: ResMut<Windows>) {
+fn update_title(
+    score: Res<Score>,
+    mut windows: ResMut<Windows>
+) {
+    if score.is_changed() {
+        let window = windows.get_primary_mut().unwrap();
+        window.set_title(format!("My Game - Score: {}", score.value));
+    }
+}
+```
+
+### Resolution
+
+Resize the window programmatically:
+
+```rust
+window.set_resolution(1920.0, 1080.0);
+```
+
+Users can also resize windows by dragging edges (if `resizable` is true).
+
+### Display Mode
+
+Switch between windowed and fullscreen modes:
+
+```rust
+// Different fullscreen modes
+window.set_mode(WindowMode::Windowed);
+window.set_mode(WindowMode::BorderlessFullscreen);  // Fullscreen without mode change
+window.set_mode(WindowMode::SizedFullscreen);       // Exclusive fullscreen
+window.set_mode(WindowMode::Fullscreen);            // Native fullscreen
+```
+
+Borderless fullscreen is fastest to switch and works well for most games. Exclusive fullscreen may have lower latency but takes longer to alt-tab.
+
+### VSync
+
+Control vertical synchronization:
+
+```rust
+window.set_vsync(true);   // Cap FPS to monitor refresh rate
+window.set_vsync(false);  // Uncapped FPS
+```
+
+VSync prevents screen tearing but may add input latency. Competitive games often disable it.
+
+### Decorations
+
+Hide or show window borders and title bar:
+
+```rust
+window.set_decorations(false);  // Borderless window
+```
+
+Useful for custom window chrome or immersive experiences.
+
+## Cursor Control
+
+### Visibility
+
+Show or hide the cursor:
+
+```rust
+fn hide_cursor_in_game(
+    state: Res<State<GameState>>,
+    mut windows: ResMut<Windows>
+) {
     let window = windows.get_primary_mut().unwrap();
-    window.set_cursor_lock_mode(CursorLockMode::Locked);
+    
+    match state.current() {
+        GameState::Playing => window.set_cursor_visibility(false),
+        GameState::Menu => window.set_cursor_visibility(true),
+    }
+}
+```
+
+### Cursor Lock
+
+Lock the cursor to the window for first-person controls:
+
+```rust
+fn lock_cursor(mut windows: ResMut<Windows>) {
+    let window = windows.get_primary_mut().unwrap();
+    window.set_cursor_lock_mode(true);
     window.set_cursor_visibility(false);
 }
 ```
 
-### Window Decorations
+When locked, the cursor stays within the window and mouse movement generates relative motion events perfect for camera controls.
 
-Control window decorations (title bar, borders):
+### Cursor Position
+
+Set the cursor position in window coordinates:
 
 ```rust
-fn toggle_decorations(mut windows: ResMut<Windows>) {
+fn center_cursor(mut windows: ResMut<Windows>) {
     let window = windows.get_primary_mut().unwrap();
-    window.set_decorations(!window.decorations());
+    let center_x = window.width() / 2.0;
+    let center_y = window.height() / 2.0;
+    window.set_cursor_position(Vec2::new(center_x, center_y));
 }
 ```
 
-### Window Transparency
+## Window Events
 
-**Added in Bevy 0.6**
+React to window state changes:
 
-Create transparent windows for widget-like applications:
+```rust
+fn handle_window_events(mut events: EventReader<WindowResized>) {
+    for event in events.iter() {
+        println!("Window resized to {}x{}", event.width, event.height);
+        // Update camera, UI, etc.
+    }
+}
+```
+
+Common window events include:
+- `WindowResized` - Window size changed
+- `WindowFocused` - Window gained or lost focus
+- `WindowMoved` - Window position changed
+- `WindowCloseRequested` - User clicked the close button
+
+### Handling Close Requests
+
+By default, clicking the close button exits the app. Intercept it to show a confirmation:
+
+```rust
+fn handle_close(
+    mut events: EventReader<WindowCloseRequested>,
+    mut app_exit: EventWriter<AppExit>
+) {
+    for _event in events.iter() {
+        // Show confirmation dialog
+        if user_confirmed_exit() {
+            app_exit.send(AppExit);
+        }
+    }
+}
+```
+
+## Window Transparency
+
+Create windows with transparent backgrounds:
 
 ```rust
 fn main() {
@@ -145,64 +240,106 @@ fn main() {
 }
 ```
 
-This allows you to create apps that blend with the desktop background, perfect for:
-- Desktop widgets
-- Overlay applications  
-- Transparent HUDs
-- Borderless applications
+The window becomes see-through where nothing renders. This enables overlay applications, desktop widgets, or creative window shapes. Platform support varies - works well on Windows, macOS, and Linux with compositing.
 
-**Note:** Platform support varies. Works well on Windows, macOS, and Linux (with compositing).
+## Multiple Windows
 
-### WASM Canvas
-
-On WASM, you can provide an existing canvas element:
+While most games use one window, you can create multiple:
 
 ```rust
-// Platform-specific configuration for WASM
-#[cfg(target_arch = "wasm32")]
-{
-    use bevy::winit::WinitSettings;
-    app.add_resource(WinitSettings {
-        canvas: Some("#my-canvas".to_string()),
+fn spawn_secondary_window(mut commands: Commands, mut windows: ResMut<Windows>) {
+    let window_id = windows.add(WindowDescriptor {
+        title: "Tool Window".to_string(),
+        width: 400.0,
+        height: 300.0,
         ..Default::default()
     });
+    
+    // Store the ID for later access
+    commands.insert_resource(ToolWindowId(window_id));
 }
 ```
 
+Access specific windows by ID:
+
+```rust
+fn update_tool_window(
+    tool_id: Res<ToolWindowId>,
+    mut windows: ResMut<Windows>
+) {
+    if let Some(window) = windows.get_mut(tool_id.0) {
+        window.set_title("Updated Title");
+    }
+}
+```
+
+## Platform Considerations
+
+### Desktop
+
+Desktop windows support all features: resizing, fullscreen, transparency, multiple windows.
+
+### Web
+
+Web builds run in the browser. Configure the canvas element:
+
+```rust
+#[cfg(target_arch = "wasm32")]
+fn configure_web_window(mut windows: ResMut<Windows>) {
+    let window = windows.get_primary_mut().unwrap();
+    window.set_canvas("#game-canvas");
+}
+```
+
+Some features like fullscreen require browser APIs and user interaction.
+
+### Mobile
+
+Mobile platforms use fullscreen by default. Window resize events reflect orientation changes and system UI visibility.
+
 ## Best Practices
 
-### Responsive Window Changes
-
-When changing window settings based on game state, use change detection to avoid unnecessary updates:
+**Use change detection** - Only update window properties when necessary:
 
 ```rust
 fn update_window(
-    game_state: Res<GameState>,
+    settings: Res<GraphicsSettings>,
     mut windows: ResMut<Windows>
 ) {
-    if game_state.is_changed() {
+    if settings.is_changed() {
         let window = windows.get_primary_mut().unwrap();
-        match *game_state {
-            GameState::Menu => {
-                window.set_cursor_visibility(true);
-            }
-            GameState::Playing => {
-                window.set_cursor_visibility(false);
-            }
+        window.set_vsync(settings.vsync);
+    }
+}
+```
+
+**Handle resize events** - Update cameras and UI when the window size changes:
+
+```rust
+fn resize_camera(
+    mut events: EventReader<WindowResized>,
+    mut camera: Query<&mut OrthographicProjection>
+) {
+    for event in events.iter() {
+        for mut projection in camera.iter_mut() {
+            projection.update(event.width, event.height);
         }
     }
 }
 ```
 
-### Handle Window Close
+**Save window state** - Remember fullscreen preferences and window position:
 
 ```rust
-fn exit_on_close(mut app_exit: EventWriter<AppExit>, windows: Res<Windows>) {
-    if windows.get_primary().map(|w| w.should_close()).unwrap_or(false) {
-        app_exit.send(AppExit);
+fn save_window_state(windows: Res<Windows>, mut settings: ResMut<GameSettings>) {
+    if let Some(window) = windows.get_primary() {
+        settings.fullscreen = matches!(window.mode(), WindowMode::Fullscreen);
+        settings.resolution = (window.width(), window.height());
     }
 }
 ```
 
-Dynamic window settings make it easy to respond to user preferences, game state changes, and create polished user experiences.
+**Provide window controls** - Let players configure window settings through menus rather than forcing a single mode.
+
+Bevy's window system handles platform complexity while providing fine-grained control. Understanding window management helps create polished, flexible applications that work well across all platforms.
 

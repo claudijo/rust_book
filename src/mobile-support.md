@@ -1,113 +1,125 @@
-# Mobile Platform Support
+# Mobile Platforms
 
-**Added in Bevy 0.3**
+Bevy runs on Android and iOS, bringing your games to mobile devices. While desktop and mobile share most code, platform differences require specific considerations.
 
-Bevy 0.3 introduced initial support for Android and iOS platforms.
+## Cross-Platform Development
 
-## Android Support
+Write your game once and deploy to multiple platforms. Bevy abstracts platform differences where possible:
 
-Initial Android support was added through a massive group effort:
+```rust
+#[bevy_main]
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_system(game_logic)
+        .run();
+}
+```
 
-### What Works
-
-- Bevy ECS schedules
-- Touch input
-- Asset loading via Android Asset Manager
-- Audio playback (via cpal)
-- Basic rendering
-
-### Setup
-
-You can try the Bevy Android example by following the instructions in the repository. 
-
-### Implementation Details
-
-The Android support involved work across multiple areas:
-- Rewrote bevy-glsl-to-spirv to support Android/static libraries
-- Asset backend using Android Asset Manager
-- Touch input support
-- Texture format compatibility
-- UI touch support including touch force
-
-### Current Status
-
-This is very fresh - many features work but some don't. This is a great time to help close the gaps!
-
-## iOS Support
-
-Bevy can now run on iOS!
-
-### What Works
-
-- Bevy ECS schedules
-- Touch input
-- Basic rendering
-- Window management
-
-### Setup
-
-You can try the Bevy iOS example by following the instructions in the repository.
-
-### Implementation Details
-
-iOS support involved:
-- XCode project setup and examples
-- Runtime shader compilation using shaderc
-- Rodio upgrade for iOS audio
-- Touch input support
-- Winit fixes for iOS portrait view
-- RustAudio iOS support
-
-### Known Issues
-
-- Audio doesn't quite work yet
+The `#[bevy_main]` attribute handles platform-specific entry points automatically. Your game logic works identically on desktop and mobile.
 
 ## Touch Input
 
-Both platforms use the unified touch input API:
+Mobile devices use touch instead of mouse and keyboard. The touch API works across platforms:
 
 ```rust
-fn touch_system(touches: Res<Touches>) {
-    for touch in touches.iter() {
+fn handle_touches(touches: Res<Touches>) {
+    for touch in touches.iter_just_pressed() {
         println!("Touch at: {:?}", touch.position());
     }
     
-    for touch in touches.iter_just_pressed() {
-        println!("New touch: {:?}", touch);
+    for touch in touches.iter() {
+        if touch.id() == 0 {
+            // Primary touch - use for camera control
+        }
     }
 }
 ```
 
-See the [Input chapter](./input.md) for complete touch input documentation.
+Design controls that work well with touch: large buttons, drag gestures, multi-touch support. See the Input chapter for complete touch documentation.
 
-## Cross-Platform Considerations
+## Asset Loading
 
-### Asset Loading
+Mobile platforms have different file system structures:
 
-Each platform uses appropriate storage:
-- **Android**: Android Asset Manager via AssetIo
-- **iOS**: Standard filesystem
-- Both use async loading
+**Android** - Assets come from the Android asset manager, not the standard file system. Bevy handles this transparently.
 
-### Rendering
+**iOS** - Assets bundle with the app. Access them normally through the asset server.
 
-Mobile platforms have specific requirements:
-- Shader compatibility (GLES vs Metal)
-- Texture format support
-- Performance considerations
+Both platforms use asynchronous loading. Don't assume assets are immediately available - check load state or use events.
 
-### Input
+## Performance Considerations
 
-Touch input is the primary input method on mobile. See [Touch Input](./input.md#touch-input) for details.
+Mobile devices have less power than desktop:
 
-## Future Work
+**GPU limits** - Mobile GPUs are less capable. Reduce draw calls, use simpler shaders, and test on target devices.
 
-Both Android and iOS support are in early stages. Expected improvements:
-- Better audio support (especially iOS)
-- Performance optimizations
-- More complete feature coverage
-- Better platform integration
-- Additional mobile-specific features
+**Memory constraints** - Mobile devices have limited RAM. Monitor memory usage and unload unused assets.
 
-The foundation is solid and ready for community contributions to close the remaining gaps!
+**Battery life** - Aggressive rendering drains batteries. Consider frame rate caps and performance modes.
+
+**Thermal throttling** - Sustained high performance heats devices, causing CPU/GPU throttling. Optimize for sustained performance, not peak bursts.
+
+## Screen Sizes and Orientations
+
+Mobile screens vary widely in size and aspect ratio. Design flexible UIs:
+
+```rust
+fn responsive_ui(windows: Res<Windows>) {
+    let window = windows.get_primary().unwrap();
+    let width = window.width();
+    let height = window.height();
+    
+    // Adjust UI based on screen dimensions
+    let is_portrait = height > width;
+    
+    // Size UI elements relative to screen size
+    let button_size = width * 0.2;
+}
+```
+
+Handle orientation changes gracefully. Don't assume landscape or portrait - support both or lock to one orientation explicitly.
+
+## Platform-Specific Setup
+
+### Android
+
+Set up Android development:
+1. Install Android Studio
+2. Install Android NDK
+3. Add Android target: `rustup target add aarch64-linux-android`
+4. Build: `cargo build --target aarch64-linux-android`
+
+Configure your app in `AndroidManifest.xml` for permissions, orientation, and other settings.
+
+### iOS
+
+Set up iOS development:
+1. Install Xcode
+2. Add iOS target: `rustup target add aarch64-apple-ios`
+3. Build: `cargo build --target aarch64-apple-ios`
+
+Use Xcode for signing and deployment configuration.
+
+## Testing
+
+**Use real devices** - Emulators/simulators don't accurately represent performance. Test on actual hardware.
+
+**Test multiple devices** - Screen sizes, GPU capabilities, and performance vary widely. Test on a range of devices.
+
+**Monitor performance** - Profile frame times, memory usage, and battery drain. Mobile constraints are stricter than desktop.
+
+## Best Practices
+
+**Optimize aggressively** - Mobile devices demand efficient code. Profile and optimize more than you would for desktop.
+
+**Handle interruptions** - Mobile apps can be interrupted by calls, notifications, or backgrounding. Save state appropriately.
+
+**Support touch idioms** - Design for touch interaction patterns. Large targets, clear feedback, and intuitive gestures.
+
+**Respect battery** - Provide options to reduce performance for battery savings.
+
+**Test early and often** - Don't wait until the end to test on mobile. Platform differences can affect design decisions.
+
+Mobile deployment expands your game's reach to billions of devices. Understanding platform constraints and designing accordingly creates experiences that work well on mobile screens with touch controls.
 

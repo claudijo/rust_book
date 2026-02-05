@@ -1,378 +1,469 @@
-# Bevy UI
+# User Interface
 
-Bevy has a custom UI system based on the "flex box" model.
+Every game needs UI: health bars, menus, inventory screens, dialog boxes. Bevy's UI system uses flexbox layout, integrates directly with the ECS, and supports both immediate and retained UI patterns.
 
-## Design Philosophy
+## UI as Entities
 
-Bevy UI was built to fully embrace the Bevy way of doing things. While there are many great pre-made UI solutions in the Rust ecosystem, integrating them would compromise either the UI framework's design or Bevy's ECS approach.
+In Bevy, UI elements are entities with specialized components. A button is an entity. A text label is an entity. A panel containing other elements is an entity. This means UI benefits from all of Bevy's ECS features: queries, change detection, events, hierarchies, and more.
 
-Bevy UI directly uses the existing ECS, hierarchy, transform, event, asset, and scene systems at the core of Bevy. Because of this, Bevy UI automatically gets features like:
-
-- Hot-reloading of UI scene files
-- Async texture loading
-- Change detection
-
-A shared architecture means improvements to any of these systems feed directly into Bevy UI.
-
-> **Note**: We are in the experimental stages and expect some things to change. Currently the best way to compose Bevy UIs is with code, but we are designing a new file format for scenes that will make declarative, file-based UI composition much nicer.
-
-## Building Blocks
-
-In Bevy, a UI element is just an ECS Entity with a Node component. Nodes are rectangles with a width and height, and are positioned using the same Transform component used elsewhere in Bevy. The Style component is used to determine how the Node is rendered, sized, and positioned.
-
-The easiest way to add a new node:
+The foundation of any UI element is a node - a rectangle positioned using flexbox layout:
 
 ```rust
-commands.spawn(NodeComponents::default())
-```
-
-NodeComponents is a "component bundle", which Bevy uses to make spawning entities of various "types" easier.
-
-## Layout
-
-For layout, Bevy uses Stretch - a 100% Rust flexbox implementation. Stretch provides the algorithms for positioning rectangles in 2D space according to the flexbox spec. Bevy exposes flex properties inside the Style component and renders rectangles with the positions and sizes that Stretch outputs. Bevy uses its own z-layering algorithm to "stack" elements on top of each other (basically the same one that HTML/CSS uses).
-
-### Relative Positioning
-
-Nodes are positioned relative to each other by default:
-
-```rust
-commands
-    .spawn(NodeComponents {
+fn spawn_ui(mut commands: Commands) {
+    commands.spawn(NodeBundle {
         style: Style {
-            size: Size::new(Val::Px(100.0), Val::Px(100.0)),
+            width: Val::Px(200.0),
+            height: Val::Px(100.0),
             ..Default::default()
         },
-        material: materials.add(Color::rgb(0.08, 0.08, 1.0).into()),
-        ..Default::default()
-    })
-    .spawn(NodeComponents {
-        style: Style {
-            size: Size::new(Val::Percent(40.0), Val::Percent(40.0)),
-            ..Default::default()
-        },
-        material: materials.add(Color::rgb(1.0, 0.08, 0.08).into()),
+        background_color: Color::rgb(0.1, 0.1, 0.1).into(),
         ..Default::default()
     });
+}
 ```
 
-### Absolute Positioning
+This creates a 200x100 pixel gray rectangle. Not exciting yet, but it's the building block for everything else.
 
-You can "absolutely" position a Node relative to its parent's corners:
+## Flexbox Layout
 
-```rust
-commands.spawn(NodeComponents {
-    style: Style {
-        size: Size::new(Val::Percent(40.0), Val::Percent(40.0)),
-        position_type: PositionType::Absolute,
-        position: Rect {
-            top: Val::Px(10.0),
-            right: Val::Px(10.0),
-            ..Default::default()
-        },
-        ..Default::default()
-    },
-    material: materials.add(Color::rgb(0.08, 0.08, 1.0).into()),
-    ..Default::default()
-});
-```
+Bevy uses flexbox for layout, the same model used in modern web development. If you know CSS flexbox, you already understand Bevy UI layout. If not, the basics are simple: containers arrange children either horizontally or vertically, with control over spacing, alignment, and sizing.
 
-### Parenting
-
-Just like any other Entity, Nodes can have children. Children are positioned and scaled relative to their parent. By default, children will always appear in front of their parents.
+Center two boxes within a parent:
 
 ```rust
 commands
-    .spawn(NodeComponents {
+    .spawn(NodeBundle {
         style: Style {
-            size: Size::new(Val::Percent(60.0), Val::Percent(60.0)),
-            position_type: PositionType::Absolute,
-            position: Rect {
-                top: Val::Px(10.0),
-                right: Val::Px(10.0),
-                ..Default::default()
-            },
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
             ..Default::default()
         },
-        material: materials.add(Color::rgb(0.08, 0.08, 1.0).into()),
+        background_color: Color::rgb(0.04, 0.04, 0.04).into(),
         ..Default::default()
     })
     .with_children(|parent| {
-        parent.spawn(NodeComponents {
+        parent.spawn(NodeBundle {
             style: Style {
-                size: Size::new(Val::Px(50.0), Val::Px(50.0)),
+                width: Val::Px(80.0),
+                height: Val::Px(80.0),
+                margin: UiRect::all(Val::Px(10.0)),
                 ..Default::default()
             },
-            material: materials.add(Color::rgb(0.5, 0.5, 1.0).into()),
+            background_color: Color::rgb(0.1, 0.1, 0.8).into(),
+            ..Default::default()
+        });
+        
+        parent.spawn(NodeBundle {
+            style: Style {
+                width: Val::Px(80.0),
+                height: Val::Px(80.0),
+                margin: UiRect::all(Val::Px(10.0)),
+                ..Default::default()
+            },
+            background_color: Color::rgb(0.8, 0.1, 0.1).into(),
             ..Default::default()
         });
     });
 ```
 
-## Flexbox
+The parent uses `justify_content` and `align_items` to center its children both horizontally and vertically. The children render as blue and red boxes side by side.
 
-You can use all of the same "flex" properties you would use in a web context. Here is an example of how you would center two Nodes vertically and horizontally within their parent:
+## Positioning Nodes
+
+Flexbox handles relative positioning by default - children flow based on the container's rules. For precise control, use absolute positioning:
 
 ```rust
-commands
-    .spawn(NodeComponents {
+commands.spawn(NodeBundle {
+    style: Style {
+        width: Val::Px(200.0),
+        height: Val::Px(100.0),
+        position_type: PositionType::Absolute,
+        left: Val::Px(10.0),
+        top: Val::Px(10.0),
+        ..Default::default()
+    },
+    background_color: Color::rgb(0.1, 0.1, 0.8).into(),
+    ..Default::default()
+});
+```
+
+Absolute positioning removes the node from flexbox flow and positions it relative to its parent's top-left corner. This is useful for floating elements like tooltips or draggable windows.
+
+## Text
+
+Text elements display strings with configurable fonts, sizes, and colors:
+
+```rust
+fn spawn_text(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.spawn(TextBundle {
+        text: Text::from_section(
+            "Hello, Bevy!",
+            TextStyle {
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size: 40.0,
+                color: Color::WHITE,
+            },
+        ),
+        ..Default::default()
+    });
+}
+```
+
+Text automatically wraps within its container and respects alignment settings.
+
+## Rich Text
+
+A single text entity can contain multiple sections with different styles:
+
+```rust
+commands.spawn(TextBundle {
+    text: Text::from_sections([
+        TextSection::new(
+            "Health: ",
+            TextStyle {
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size: 30.0,
+                color: Color::WHITE,
+            },
+        ),
+        TextSection::new(
+            "100",
+            TextStyle {
+                font: asset_server.load("fonts/FiraMono-Medium.ttf"),
+                font_size: 30.0,
+                color: Color::GREEN,
+            },
+        ),
+    ]),
+    ..Default::default()
+});
+```
+
+This renders "Health: " in one font and "100" in another with a different color. Update individual sections by querying the Text component and modifying specific sections.
+
+## Images
+
+Display textures in UI with ImageBundle:
+
+```rust
+fn spawn_image(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.spawn(ImageBundle {
         style: Style {
-            size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
+            width: Val::Px(150.0),
+            height: Val::Auto,
+            ..Default::default()
+        },
+        image: asset_server.load("icon.png").into(),
+        ..Default::default()
+    });
+}
+```
+
+Set width or height to `Auto` to maintain the texture's aspect ratio.
+
+## Buttons
+
+Buttons combine visual nodes with interaction tracking:
+
+```rust
+fn spawn_button(mut commands: Commands) {
+    commands.spawn(ButtonBundle {
+        style: Style {
+            width: Val::Px(150.0),
+            height: Val::Px(65.0),
             justify_content: JustifyContent::Center,
             align_items: AlignItems::Center,
             ..Default::default()
         },
-        material: materials.add(Color::rgb(0.04, 0.04, 0.04).into()),
+        background_color: Color::rgb(0.15, 0.15, 0.15).into(),
         ..Default::default()
     })
     .with_children(|parent| {
-        parent
-            .spawn(NodeComponents {
-                style: Style {
-                    size: Size::new(Val::Px(80.0), Val::Px(80.0)),
-                    ..Default::default()
-                },
-                material: materials.add(Color::rgb(0.08, 0.08, 1.0).into()),
+        parent.spawn(TextBundle::from_section(
+            "Click Me",
+            TextStyle {
+                font_size: 30.0,
+                color: Color::WHITE,
                 ..Default::default()
-            })
-            .spawn(NodeComponents {
-                style: Style {
-                    size: Size::new(Val::Px(80.0), Val::Px(80.0)),
-                    ..Default::default()
-                },
-                material: materials.add(Color::rgb(1.0, 0.08, 0.08).into()),
-                ..Default::default()
-            });
+            },
+        ));
     });
+}
 ```
 
-## Text and Images
+The button itself is a container, and the text is a child. This pattern separates the clickable area from the visual content.
 
-Nodes can also have Text and Image components, which affect the inferred sizes of nodes.
+## Button Interaction
 
-### Text
-
-```rust
-commands.spawn(TextComponents {
-    text: Text {
-        value: "Hello from Bevy UI!".to_string(),
-        font: asset_server.load("FiraSans-Bold.ttf").unwrap(),
-        style: TextStyle {
-            font_size: 25.0,
-            color: Color::WHITE,
-        },
-    },
-    ..Default::default()
-});
-```
-
-### Images
+Query the `Interaction` component to respond to button events:
 
 ```rust
-commands.spawn(ImageComponents {
-    style: Style {
-        size: Size::new(Val::Px(200.0), Val::Auto),
-        position_type: PositionType::Absolute,
-        position: Rect {
-            top: Val::Px(10.0),
-            right: Val::Px(10.0),
-            ..Default::default()
-        },
-        ..Default::default()
-    },
-    material: materials.add(asset_server.load("bevy_logo.png").unwrap().into()),
-    ..Default::default()
-});
-```
-
-## Interaction Events
-
-Nodes with the Interaction component will track interaction state. You can easily build widgets like buttons this way.
-
-Here is a system that only runs on Buttons where the Interaction state has changed:
-
-```rust
-fn system(_button: &Button, interaction: Mutated<Interaction>) {
-    match *interaction {
-        Interaction::Clicked => println!("clicked"),
-        Interaction::Hovered => println!("hovered"),
-        Interaction::None => {},
+fn button_system(
+    mut interaction_query: Query<
+        (&Interaction, &mut BackgroundColor),
+        Changed<Interaction>
+    >
+) {
+    for (interaction, mut color) in interaction_query.iter_mut() {
+        match *interaction {
+            Interaction::Pressed => {
+                *color = Color::rgb(0.35, 0.35, 0.35).into();
+                println!("Button pressed!");
+            }
+            Interaction::Hovered => {
+                *color = Color::rgb(0.25, 0.25, 0.25).into();
+            }
+            Interaction::None => {
+                *color = Color::rgb(0.15, 0.15, 0.15).into();
+            }
+        }
     }
 }
 ```
 
-## Bevy 0.2 Improvements
+The `Changed<Interaction>` filter ensures this only runs when interaction state changes, avoiding unnecessary work.
 
-**Changes in Bevy 0.2:**
+## Building a UI Layout
 
-### Multiline Text Support
-
-The `DrawableText` component now supports multiline text rendering.
-
-### Default Node Size
-
-The default node size changed from `Undefined` to `Auto` to match the Stretch implementation. This provides more intuitive default behavior.
-
-### Component Bundle Cloning
-
-UI component bundles now derive `Clone`, making it easier to reuse UI configurations:
+Let's build a practical game HUD:
 
 ```rust
-let button_bundle = ButtonComponents {
-    // ... configuration
-};
-
-// Can now clone the bundle
-commands.spawn(button_bundle.clone());
+fn spawn_hud(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // Root node - fills the screen
+    commands
+        .spawn(NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                justify_content: JustifyContent::SpaceBetween,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .with_children(|parent| {
+            // Top-left corner - health display
+            parent.spawn(NodeBundle {
+                style: Style {
+                    width: Val::Px(200.0),
+                    height: Val::Px(50.0),
+                    margin: UiRect::all(Val::Px(10.0)),
+                    padding: UiRect::all(Val::Px(10.0)),
+                    ..Default::default()
+                },
+                background_color: Color::rgba(0.0, 0.0, 0.0, 0.5).into(),
+                ..Default::default()
+            })
+            .with_children(|parent| {
+                parent.spawn(TextBundle::from_section(
+                    "Health: 100",
+                    TextStyle {
+                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                        font_size: 30.0,
+                        color: Color::WHITE,
+                    },
+                ));
+            });
+            
+            // Top-right corner - score display
+            parent.spawn(NodeBundle {
+                style: Style {
+                    width: Val::Px(200.0),
+                    height: Val::Px(50.0),
+                    margin: UiRect::all(Val::Px(10.0)),
+                    padding: UiRect::all(Val::Px(10.0)),
+                    ..Default::default()
+                },
+                background_color: Color::rgba(0.0, 0.0, 0.0, 0.5).into(),
+                ..Default::default()
+            })
+            .with_children(|parent| {
+                parent.spawn(TextBundle::from_section(
+                    "Score: 0",
+                    TextStyle {
+                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                        font_size: 30.0,
+                        color: Color::WHITE,
+                    },
+                ));
+            });
+        });
+}
 ```
 
-### Font Atlas Improvements
+## Updating UI at Runtime
 
-Fixed font atlas overflow issues that could occur with certain font sizes and character sets.
-
-## Bevy 0.6 Improvements
-
-**Added in Bevy 0.6:**
-
-### Overflow::Hidden
-
-UI nodes now respect the flexbox `Overflow::Hidden` property, which cuts off child content that extends beyond the parent's bounds:
+UI elements are entities, so update them like any other component:
 
 ```rust
-commands.spawn_bundle(NodeBundle {
+#[derive(Component)]
+struct HealthText;
+
+fn update_health_display(
+    player_health: Query<&Health, With<Player>>,
+    mut text_query: Query<&mut Text, With<HealthText>>
+) {
+    if let Ok(health) = player_health.get_single() {
+        for mut text in text_query.iter_mut() {
+            text.sections[0].value = format!("Health: {}", health.current);
+        }
+    }
+}
+```
+
+Tag UI entities with marker components to query them specifically.
+
+## Clipping Content
+
+The `Overflow::Hidden` property clips content that extends beyond a node's bounds:
+
+```rust
+commands.spawn(NodeBundle {
     style: Style {
-        size: Size::new(Val::Px(200.0), Val::Px(100.0)),
-        overflow: Overflow::Hidden,  // Cut off children outside bounds
-        flex_direction: FlexDirection::Column,
+        width: Val::Px(300.0),
+        height: Val::Px(200.0),
+        overflow: Overflow::clip(),
         ..Default::default()
     },
-    color: Color::rgb(0.1, 0.1, 0.1).into(),
+    background_color: Color::rgb(0.1, 0.1, 0.1).into(),
     ..Default::default()
 })
 .with_children(|parent| {
-    // This content will be clipped if it exceeds parent size
-    parent.spawn_bundle(TextBundle {
-        text: Text::with_section(
-            "This is a very long text that might overflow...",
-            TextStyle {
-                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                font_size: 20.0,
-                color: Color::WHITE,
-            },
-            Default::default(),
-        ),
-        ..Default::default()
-    });
+    // This content will be clipped if too large
+    parent.spawn(TextBundle::from_section(
+        "Very long text that might overflow the container...",
+        TextStyle { /* ... */ },
+    ));
 });
 ```
 
-**Use cases:**
-- Scrollable lists
-- Text boxes with size limits
-- Clipped image viewers
-- Chat windows
+This is essential for scrollable lists, text boxes, and chat windows.
 
-### Text2D Transforms
+## Text in World Space
 
-Text2d now supports arbitrary transformations using the Transform component:
+While UI text appears in screen space, you can also render text in the game world using Text2dBundle:
 
 ```rust
-commands.spawn_bundle(Text2dBundle {
-    text: Text::with_section(
-        "Rotated Text!",
+commands.spawn(Text2dBundle {
+    text: Text::from_section(
+        "3D Label",
         TextStyle {
             font: asset_server.load("fonts/FiraSans-Bold.ttf"),
             font_size: 60.0,
             color: Color::WHITE,
         },
-        TextAlignment {
-            horizontal: HorizontalAlign::Center,
-            ..Default::default()
-        },
     ),
-    transform: Transform {
-        translation: Vec3::new(0.0, 0.0, 1.0),
-        rotation: Quat::from_rotation_z(std::f32::consts::PI / 4.0),  // 45 degree rotation
-        scale: Vec3::splat(1.5),
-    },
+    transform: Transform::from_xyz(0.0, 2.0, 0.0)
+        .with_rotation(Quat::from_rotation_y(std::f32::consts::PI / 4.0)),
     ..Default::default()
 });
 ```
 
-**Capabilities:**
-- Rotate text at any angle
-- Scale text (though font_size is usually better for crisp rendering)
-- Position text in 2D world space
-- Apply any transform (even 3D transformations!)
+This text exists in 3D space, rotates with the camera, and can be transformed like any other entity. It's perfect for labels, damage numbers, or floating UI elements.
 
-**Note:** While `Transform::scale` works, adjusting `font_size` directly is generally better for crisp text rendering.
+## Z-Index and Layering
 
-## Bevy 0.5 Text Improvements
-
-**Added in Bevy 0.5:**
-
-### Rich Text
-
-Text can now have multiple "sections", each with their own style and formatting:
+UI elements render in a specific order. By default, children render on top of parents, and later siblings render on top of earlier ones. For explicit control, use z-index:
 
 ```rust
-commands.spawn_bundle(TextBundle {
-    text: Text {
-        sections: vec![
-            TextSection {
-                value: "Score: ".to_string(),
-                style: TextStyle {
-                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                    font_size: 60.0,
-                    color: Color::WHITE,
-                },
-            },
-            TextSection {
-                value: "0".to_string(),
-                style: TextStyle {
-                    font: asset_server.load("fonts/FiraMono-Medium.ttf"),
-                    font_size: 60.0,
-                    color: Color::GOLD,
-                },
-            },
-            TextSection {
-                value: " points".to_string(),
-                style: TextStyle {
-                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                    font_size: 40.0,
-                    color: Color::GRAY,
-                },
-            },
-        ],
+commands.spawn(NodeBundle {
+    style: Style {
+        position_type: PositionType::Absolute,
+        ..Default::default()
+    },
+    z_index: ZIndex::Global(10),
+    ..Default::default()
+});
+```
+
+Higher z-index values render on top. Use `ZIndex::Local` for ordering within a container or `ZIndex::Global` for absolute ordering.
+
+## Responsive UI
+
+Size nodes with percentages to scale with screen resolution:
+
+```rust
+commands.spawn(NodeBundle {
+    style: Style {
+        width: Val::Percent(80.0),  // 80% of parent width
+        height: Val::Px(100.0),     // Fixed 100 pixels
         ..Default::default()
     },
     ..Default::default()
 });
 ```
 
-**Benefits:**
-- Different fonts per section
-- Different sizes per section  
-- Different colors per section
-- All within a single Text component
-- Respects text layout rules
+Combine fixed and percentage sizing to create UIs that adapt to different screen sizes.
 
-**Use cases:**
-- Colored/highlighted text
-- Mixed font UI (labels + values)
-- Formatted game text
-- Dynamic text with varying styles
+## Design Patterns
 
-### HIDPI Text
+UI built with the ECS encourages certain patterns:
 
-**Added in Bevy 0.5**
+**Marker components** - Tag UI elements for specific queries:
+```rust
+#[derive(Component)]
+struct HealthBar;
 
-Text is now automatically rendered according to the monitor's scale factor, providing crisp text at any resolution:
+#[derive(Component)]
+struct MenuButton;
+```
 
-- ✅ Automatically detects DPI scaling
-- ✅ Renders at native resolution
-- ✅ Crisp on retina/HIDPI displays
-- ✅ No configuration needed
+**Bundle reuse** - Create functions that return configured bundles:
+```rust
+fn styled_button(text: &str) -> ButtonBundle {
+    ButtonBundle {
+        style: Style {
+            width: Val::Px(150.0),
+            height: Val::Px(65.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..Default::default()
+        },
+        background_color: Color::rgb(0.15, 0.15, 0.15).into(),
+        ..Default::default()
+    }
+}
+```
 
-Text now looks sharp on both standard and high-DPI displays!
+**State-driven UI** - Spawn and despawn UI based on game state:
+```rust
+fn setup_menu(mut commands: Commands) {
+    commands
+        .spawn(NodeBundle { /* ... */ })
+        .insert(MenuRoot);  // Tag for cleanup
+}
+
+fn cleanup_menu(mut commands: Commands, query: Query<Entity, With<MenuRoot>>) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+```
+
+## Performance Considerations
+
+UI rendering is efficient, but keep a few things in mind:
+
+**Minimize changes** - Only update text and colors when they actually change. Use change detection to avoid unnecessary updates.
+
+**Batch similar elements** - Group elements with the same materials to reduce draw calls.
+
+**Don't over-nest** - Deep hierarchies work but aren't free. Keep nesting reasonable.
+
+**Reuse fonts** - Load fonts once and share handles rather than loading the same font multiple times.
+
+## Best Practices
+
+**Use marker components** - Tag UI elements for easy querying and modification.
+
+**Separate data from presentation** - Store game state separately from UI. Update UI based on state changes.
+
+**Design for multiple resolutions** - Use percentage sizing and test on different screen sizes.
+
+**Provide visual feedback** - Show hover and press states for interactive elements.
+
+**Consider accessibility** - Use reasonable font sizes and color contrast.
+
+Bevy's UI system integrates naturally with the rest of the engine. Understanding flexbox layout and ECS patterns will let you build complex, interactive interfaces efficiently.
 

@@ -1,764 +1,537 @@
 # Bevy ECS
 
-All Bevy engine and game logic is built on top of a custom Entity Component System (ECS).
+All Bevy engine and game logic is built on a custom Entity Component System (ECS).
 
-## What is ECS?
+## Understanding ECS
 
-Entity Component Systems are a software paradigm that involves breaking data up into **Components**. **Entities** are unique ids assigned to groups of Components. For example, one entity might have a Position and Velocity component, whereas another entity might have a Position and UI component. **Systems** are logic that runs on a specific set of component types. You might have a movement system that runs on all entities with a Position and Velocity component.
+Entity Component Systems separate data from behavior in a way that maximizes performance and flexibility.
 
-The ECS pattern encourages clean, decoupled designs by forcing you to break up your app data and logic into its core components.
+**Components** are pure data structures. A Position component holds coordinates. A Velocity component holds speed. A Health component holds hit points.
 
-## Bevy's Approach
+**Entities** are unique identifiers that group components together. Entity #42 might have Position, Velocity, and Health components, making it a moving, damageable object.
 
-Unlike other Rust ECS implementations, which require complex lifetimes, traits, builder patterns, or macros, Bevy ECS uses normal Rust datatypes for all of these concepts:
+**Systems** are functions that operate on entities with specific components. A movement system processes all entities that have both Position and Velocity, updating positions based on velocities.
 
-- **Components**: normal Rust structs (derive `Component` in 0.6+)
-- **Systems**: normal Rust functions
-- **Entities**: a type containing a unique integer
+This separation encourages clean designs by forcing you to think in terms of data and transformations, not object hierarchies.
 
-**Component Derive (Bevy 0.6+):**
+## Why ECS?
+
+Traditional object-oriented game code often becomes a tangled mess of inheritance hierarchies and cross-dependencies. ECS solves this by:
+
+**Composition over inheritance** - Build complex entities by combining simple components rather than fighting with inheritance trees.
+
+**Cache-friendly iteration** - Components of the same type are stored contiguously in memory. When iterating over thousands of entities, this locality means your CPU can prefetch data efficiently instead of jumping around memory randomly.
+
+**Automatic parallelization** - Since systems declare their data dependencies explicitly, Bevy can safely run systems in parallel without locks or synchronization overhead.
+
+**Clean separation** - Data (components) is completely separate from logic (systems), making both easier to understand, test, and modify.
+
+## Components
+
+Components are ordinary Rust structs that derive the `Component` trait:
 
 ```rust
 #[derive(Component)]
-struct Position(f32);
+struct Position {
+    x: f32,
+    y: f32,
+}
 
 #[derive(Component)]
-struct Velocity(f32);
-```
+struct Velocity {
+    x: f32,
+    y: f32,
+}
 
-Before 0.6, any type could be a component. Starting in 0.6, you must derive (or manually implement) the `Component` trait. This enables compile-time optimizations.
+#[derive(Component)]
+struct Health {
+    current: f32,
+    max: f32,
+}
+```
 
 ### Component Storage
 
-You can specify storage type at compile time:
+Bevy offers two storage strategies optimized for different access patterns:
+
+**Table storage** (default) - Components are stored in contiguous arrays. Fast to iterate, slower to add/remove.
+
+```rust
+#[derive(Component)]
+struct Position { x: f32, y: f32 }
+```
+
+**SparseSet storage** - Components are stored in a sparse set structure. Fast to add/remove, slightly slower to iterate.
 
 ```rust
 #[derive(Component)]
 #[component(storage = "SparseSet")]
-struct MyComponent;
+struct Marker;
 ```
 
-Default is Table storage. SparseSet is better for components that are rarely accessed or frequently added/removed.
+Use SparseSet for components that are frequently added and removed (like temporary status effects) or accessed rarely. The default Table storage is best for components that exist throughout an entity's lifetime and are accessed frequently.
 
-## Ergonomics
+## Systems
 
-Bevy ECS is designed to be the most ergonomic ECS in existence. Here's a complete example:
+Systems are normal Rust functions that operate on the game world:
+
+```rust
+fn movement(mut query: Query<(&mut Position, &Velocity)>) {
+    for (mut position, velocity) in query.iter_mut() {
+        position.x += velocity.x;
+        position.y += velocity.y;
+    }
+}
+```
+
+The function signature tells Bevy everything it needs to know. From the parameters, Bevy:
+- Determines what data this system needs
+- Schedules it to run in parallel with other systems when safe
+- Provides access only to the requested data
+- Tracks changes automatically for optimization
+
+## Complete Example
 
 ```rust
 use bevy::prelude::*;
 
-#[derive(Component)]  // Required in 0.6+
-struct Velocity(f32);
+#[derive(Component)]
+struct Velocity { x: f32, y: f32 }
 
 #[derive(Component)]
-struct Position(f32);
+struct Position { x: f32, y: f32 }
 
-// this system spawns entities with the Position and Velocity components
-fn setup(mut commands: Commands) {
-    commands
-        .spawn()
-        .insert_bundle((Position(0.0), Velocity(1.0)))
-        .spawn()
-        .insert_bundle((Position(1.0), Velocity(2.0)));
+fn spawn_entities(mut commands: Commands) {
+    commands.spawn((
+        Position { x: 0.0, y: 0.0 },
+        Velocity { x: 1.0, y: 0.5 },
+    ));
 }
 
-// this system runs on each entity with a Position and Velocity component
 fn movement(mut query: Query<(&mut Position, &Velocity)>) {
     for (mut position, velocity) in query.iter_mut() {
-        position.0 += velocity.0;
+        position.x += velocity.x;
+        position.y += velocity.y;
     }
 }
 
-// the app entry point
 fn main() {
-    App::new()  // Changed from App::build() in 0.6
+    App::new()
         .add_plugins(DefaultPlugins)
-        .add_startup_system(setup)  // .system() optional in 0.6
+        .add_startup_system(spawn_entities)
         .add_system(movement)
         .run();
 }
 ```
 
-That is a complete self-contained Bevy app with automatic parallel system scheduling and global change detection.
+This complete application spawns moving entities with automatic parallel scheduling and change detection.
 
-## Performance
+## Queries
 
-The ECS paradigm has the potential to make game logic super fast for two main reasons:
+Queries are how systems access entity data. A query specifies what components you need, and Bevy efficiently provides all matching entities.
 
-1. **Iteration Speed**: Components are packed tightly together to optimize for cache-locality, which makes iterating over them blazing fast
-2. **Parallelism**: Systems declare read/write dependencies, which enables automatic and efficient lock-free parallel scheduling
-
-Bevy ECS does both of these things about as well as it can. According to the popular ecs_bench benchmark, Bevy ECS is the fastest Rust ECS by a pretty wide margin in both system iteration and world setup.
-
-> Note: ecs_bench is a single threaded benchmark, so it doesn't illustrate the multi-threading capabilities. As always, be aware that ecs_bench is a micro benchmark and doesn't illustrate the performance of a complex game.
-
-## System Types
-
-### For Each Systems
-
-**Deprecated in Bevy 0.4**
-
-"For each systems" were available in Bevy 0.1-0.3 and ran once for each entity:
+### Basic Queries
 
 ```rust
-// Bevy 0.1-0.3 only (deprecated in 0.4)
-fn system(position: Mut<Position>, velocity: &Velocity) {
-    // ran once per entity
-}
-```
-
-**Why were they removed?**
-1. Fundamentally limited - couldn't filter, use multiple queries, or iterate removed components
-2. Forced design decisions - "one way to do things" is better
-3. Common "gotchas" for newcomers (e.g., `&mut T` vs `Mut<T>` confusion)
-4. Increased compile times (~5 seconds saved by removing)
-5. Complex macro implementation
-
-**Use Query Systems Instead (Bevy 0.4+):**
-```rust
-fn system(query: Query<(&mut Position, &Velocity)>) {
+fn movement(mut query: Query<(&mut Position, &Velocity)>) {
     for (mut position, velocity) in query.iter_mut() {
-        // per-entity logic here
+        position.x += velocity.x;
+        position.y += velocity.y;
     }
 }
 ```
 
-### Query Systems
+The query `Query<(&mut Position, &Velocity)>` means: "Give me mutable access to Position and immutable access to Velocity for all entities that have both components."
 
-Query systems give you control over iteration:
+### Iteration
 
-**Bevy 0.1-0.2:**
+Mutable iteration when you need to modify components:
+
 ```rust
-fn system(mut query: Query<(&Position, &mut Velocity)>) {
-    for (position, mut velocity) in &mut query.iter() {
-        // do something
+fn system(mut query: Query<&mut Position>) {
+    for mut position in query.iter_mut() {
+        position.x += 1.0;
     }
 }
 ```
 
-**Bevy 0.3-0.5 (improved ergonomics):**
+Immutable iteration when you only need to read:
+
 ```rust
-fn system(mut query: Query<(&Position, &mut Velocity)>) {
-    // query.iter() is now a real iterator! No more &mut required
-    for (position, mut velocity) in query.iter() {
-        // sweet ergonomic bliss
+fn system(query: Query<(&Position, &Velocity)>) {
+    for (position, velocity) in query.iter() {
+        println!("Entity at {:?} moving {:?}", position, velocity);
     }
 }
 ```
 
-**Bevy 0.6 (immutable iteration on mutable queries):**
-```rust
-fn system(mut query: Query<&mut Player>) {
-    // Can iterate immutably without QuerySet!
-    for player in query.iter() {
-        // player is an immutable reference
-    }
-
-    // Or iterate mutably
-    for mut player in query.iter_mut() {
-        // player is a mutable reference
-    }
-}
-```
-
-Before 0.6, this required a QuerySet. Now mutable queries can be iterated immutably, eliminating the need for QuerySets in many cases.
-
-### Query Combinations
-
-**Added in Bevy 0.6**
-
-Iterate all combinations of N entities:
+You can iterate immutably even with mutable access:
 
 ```rust
-fn collision_system(query: Query<(&Transform, &Collider)>) {
-    // Check all pairs of entities for collisions
-    for [(t1, c1), (t2, c2)] in query.iter_combinations() {
-        // Each pair is checked exactly once
-        if check_collision(t1, c1, t2, c2) {
-            println!("Collision detected!");
+fn system(mut query: Query<&mut Health>) {
+    // Check first without modifying
+    for health in query.iter() {
+        if health.current <= 0.0 {
+            println!("Found dead entity");
         }
     }
-}
-
-fn gravity_system(mut query: Query<(&Transform, &mut Velocity, &Mass)>) {
-    // Calculate gravity between all pairs
-    for [(t1, mut v1, m1), (t2, mut v2, m2)] in query.iter_combinations_mut() {
-        apply_gravity(t1, &mut v1, m1, t2, &mut v2, m2);
+    
+    // Then modify
+    for mut health in query.iter_mut() {
+        health.current = health.current.min(health.max);
     }
 }
 ```
 
-**Warning:** Time complexity grows exponentially! Use with care for large entity counts.
+### Accessing Specific Entities
+
+```rust
+fn system(query: Query<(&Position, &Velocity)>, target: Res<TargetEntity>) {
+    if let Ok((position, velocity)) = query.get(target.0) {
+        println!("Target at {:?} moving {:?}", position, velocity);
+    }
+}
+```
+
+### Single Entity Queries
+
+When you expect exactly one matching entity:
+
+```rust
+fn system(query: Query<&Transform, With<Player>>) {
+    let player_transform = query.single();
+    // Use the transform
+}
+```
+
+This panics if there isn't exactly one match. For fallible access:
+
+```rust
+fn system(query: Query<&Transform, With<Player>>) {
+    if let Ok(player_transform) = query.get_single() {
+        // Use the transform
+    }
+}
+```
+
+### Query Filters
+
+Filters let you specify additional constraints without retrieving components:
+
+```rust
+fn system(query: Query<(&Transform, &Velocity), (With<Enemy>, Without<Dead>)>) {
+    for (transform, velocity) in query.iter() {
+        // Only processes living enemies
+    }
+}
+```
+
+Common filters:
+- `With<T>` - Entity must have component T
+- `Without<T>` - Entity must not have component T
+- `Changed<T>` - Component T was added or modified this frame
+- `Added<T>` - Component T was just added
+
+You can create type aliases for reusable filter combinations:
+
+```rust
+type Damageable = (With<Health>, Without<Invulnerable>);
+
+fn damage_system(query: Query<&mut Health, Damageable>) {
+    // Only entities that can be damaged
+}
+```
 
 ### Change Detection
 
-**Added** queries only run when the given component has been added:
+Change detection lets you react only when components are modified:
 
 ```rust
-fn system(mut query: Query<Added<Position>>) {
-    for position in &mut query.iter() {
-        // do something
+fn react_to_movement(query: Query<&Transform, Changed<Transform>>) {
+    for transform in query.iter() {
+        println!("Entity moved to {:?}", transform.translation);
     }
 }
 ```
 
-**Mutated** queries only run when the given component has been mutated:
+Track when components are removed:
 
 ```rust
-fn system(mut query: Query<Mutated<Position>>) {
-    for position in &mut query.iter() {
-        // do something
+fn cleanup_removed(mut query: Query<&Position>) {
+    for entity in query.removed::<Weapon>() {
+        println!("Entity {:?} lost its weapon", entity);
     }
 }
 ```
 
-**Changed** queries only run when the given component has been added or mutated:
+### Iterating Combinations
+
+Check all pairs of entities (useful for collision detection):
 
 ```rust
-fn system(mut query: Query<Changed<Position>>) {
-    for position in &mut query.iter() {
-        // do something
+fn collision_system(query: Query<(Entity, &Transform, &Collider)>) {
+    for [(e1, t1, c1), (e2, t2, c2)] in query.iter_combinations() {
+        if check_collision(t1, c1, t2, c2) {
+            println!("Collision between {:?} and {:?}", e1, e2);
+        }
     }
 }
 ```
 
-**Removed** iterates over every entity where the component was removed this update:
+Each pair is checked exactly once. Note that this is O(n²) - use spatial partitioning for large numbers of entities.
+
+### Parallel Queries
+
+Distribute query work across multiple threads:
 
 ```rust
-fn system(mut query: Query<&Position>) {
-    for entity in query.removed::<Velocity>() {
-        // do something
-    }
+fn system(pool: Res<ComputeTaskPool>, mut query: Query<&mut Transform>) {
+    query.par_iter_mut().for_each(&pool, |mut transform| {
+        // This runs in parallel across thread pool
+        transform.translation.y -= 9.8 * delta;
+    });
 }
 ```
+
+Bevy automatically breaks the query into batches and distributes them across available threads.
 
 ### Multiple Queries
 
-Systems can have multiple queries:
+Systems can have multiple independent queries:
 
 ```rust
-fn system(mut wall_query: Query<&Wall>, mut player_query: Query<&Player>) {
-    for player in &mut player_query.iter() {
-        for wall in &mut wall_query.iter() {
-            if player.collides_with(wall) {
-                println!("ouch");
+fn system(
+    players: Query<&Transform, With<Player>>,
+    enemies: Query<&Transform, With<Enemy>>
+) {
+    for player_pos in players.iter() {
+        for enemy_pos in enemies.iter() {
+            let distance = player_pos.translation.distance(enemy_pos.translation);
+            if distance < 5.0 {
+                println!("Enemy nearby!");
             }
         }
     }
 }
 ```
 
-### Parallel Queries
+### Conflicting Queries
 
-**Added in Bevy 0.2**
-
-Queries can now be iterated in parallel to distribute work across multiple threads:
+If you need overlapping mutable access, use QuerySet:
 
 ```rust
-fn system(pool: Res<ComputeTaskPool>, mut query: Query<&mut Transform>) {
-    query.iter().par_iter(32).for_each(&pool, |mut transform| {
-      transform.translate(Vec3::new(1.0, 0.0, 0.0));
-    });
-}
-```
-
-This breaks the query up into 32 "batches" and runs each batch as a different task in the bevy task system.
-
-### QuerySets and 100% Lockless ECS
-
-**Added in Bevy 0.3**
-
-Bevy ECS became completely lock-free in version 0.3. Previously, locks were needed to prevent unsafe access when systems had conflicting queries like this:
-
-```rust
-// This would have been unsafe without locks
-fn conflicting_query_system(mut q0: Query<&mut A>, mut q1: Query<(&mut A, &B)>) {
-    let a = q0.get_mut(some_entity).unwrap();
-    let (another_a, b) = q1.get_mut(some_entity).unwrap();
-    // Aaah!!! Two mutable references to the same component!
-}
-```
-
-In Bevy 0.3, systems with conflicting queries fail when the schedule is constructed. For cases where conflicting queries are needed, **QuerySets** were added:
-
-```rust
-fn system(mut queries: QuerySet<(Query<&mut A>, Query<(&mut A, &B)>)>) {
-    for a in queries.q0_mut().iter_mut() {
-        // Access first query
+fn system(mut queries: QuerySet<(
+    QueryState<&mut Health>,
+    QueryState<(&mut Health, &Armor)>
+)>) {
+    // First query
+    for health in queries.q0().iter() {
+        println!("Health: {}", health.current);
     }
-
-    for (a, b) in queries.q1_mut().iter_mut() {
-        // Access second query  
+    
+    // Second query (overlaps with first)
+    for (mut health, armor) in queries.q1().iter_mut() {
+        health.current += armor.regeneration;
     }
 }
 ```
 
-By putting conflicting Queries in a QuerySet, the Rust borrow checker protects us from unsafe query accesses. This allowed removal of all safety checks and locks from query access, making Bevy ECS 100% lock-free.
-
-### Query API Changes in Bevy 0.3
-
-**Changed in Bevy 0.3**
-
-Several query methods were renamed and improved:
-
-- `query.entity(entity)` → `query.get(entity)` (returns full query result)
-- `query.get::<Component>(entity)` → `query.get_component::<Component>(entity)` (for single component access)
-- Added separate `query.iter()` and `query.iter_mut()` for read-only and mutable iteration
-- Added `query.get(entity)` and `query.get_mut(entity)` for entity-specific access
-
-**Before (0.2):**
-```rust
-if let Ok(mut result) = query.entity(entity) {
-    if let Some((a, b)) = result.get() {
-        // access components here
-    }
-}
-```
-
-**After (0.3):**
-```rust
-if let Ok((a, b)) = query.get(entity) {
-    // boilerplate be gone!
-}
-```
-
-### Single Entity Queries
-
-**Changed in Bevy 0.6**
-
-For queries that should have exactly one result:
-
-**Bevy 0.6+ (infallible - panics if not exactly one):**
-```rust
-fn player_system(query: Query<&Transform, With<Player>>) {
-    let player_transform = query.single();  // Panics if != 1 entity
-    // Use player_transform
-}
-```
-
-**Bevy 0.6+ (fallible - returns Result):**
-```rust
-fn player_system(query: Query<&Transform, With<Player>>) {
-    if let Ok(player_transform) = query.get_single() {
-        // Use player_transform
-    }
-}
-```
-
-Before 0.6, `single()` returned a Result. In 0.6, it panics for convenience. Use `get_single()` if you need the old behavior.
-
-### Or Queries
-
-**Added in Bevy 0.2**
-
-Support for Or in ECS queries allows matching entities that have any of the specified components:
-
-```rust
-// Matches entities with either ComponentA or ComponentB
-fn system(query: Query<Or<&ComponentA, &ComponentB>>) {
-    // ...
-}
-```
-
-### Entity Queries and Direct Component Access
-
-```rust
-fn system(mut entity_query: Query<Entity>, mut player_query: Query<&Player>) {
-    for entity in &mut entity_query.iter() {
-       if let Some(player) = player_query.get::<Player>(entity) {
-           // the current entity has a player component
-       }
-    }
-}
-```
+QuerySet ensures only one query is active at a time, preventing unsafe mutable aliasing while still allowing both queries in the same system.
 
 ## Resources
 
-`Res` and `ResMut` access global resources:
+Resources are global data accessible to all systems:
 
 ```rust
-fn system(time: Res<Time>, score: ResMut<Score>) {
-    // do something
+fn system(time: Res<Time>, mut score: ResMut<Score>) {
+    score.points += time.delta_seconds() as i32;
 }
 ```
 
-You can use Resources in any system type:
+Use `Res<T>` for immutable access and `ResMut<T>` for mutable access.
+
+### Local Resources
+
+Local resources are unique per-system instance. They're initialized to their default value:
 
 ```rust
-fn system(time: Res<Time>, mut query: Query<&Position>) {
-    // do something
-}
+#[derive(Default)]
+struct FrameCount(u32);
 
-fn system(time: Res<Time>, &Position) {
-    // do something
+fn system(mut count: Local<FrameCount>, query: Query<&Position>) {
+    count.0 += 1;
+    println!("System has run {} times", count.0);
 }
 ```
 
-### Local System Resources
-
-`Local<T>` resources are unique per-system. Two instances of the same system will each have their own resource. Local resources are automatically initialized to their default value:
-
-```rust
-fn system(state: Local<State>, &Position) {
-    // do something
-}
-```
-
-### Thread Local Resources
-
-**Added in Bevy 0.3**
-
-Some resource types cannot (or should not) be passed between threads. This is often true for low-level APIs like windowing, input, and audio. Thread local resources can only be accessed from the main thread using "thread local systems":
-
-```rust
-// In your app setup
-app.add_thread_local_resource(MyResource);
-
-// A thread local system
-fn system(world: &mut World, resources: &mut Resources) {
-    let my_resource = resources.get_thread_local::<MyResource>().unwrap();
-    // do something with my_resource
-}
-```
-
-Thread local systems have exclusive access to the World and Resources, and must run on the main thread.
+Different instances of the same system each have their own local state.
 
 ### SystemState
 
-**Added in Bevy 0.6**
-
-Use system params directly with a World without registering a system:
+Access system parameters directly without creating a full system:
 
 ```rust
-// Create a SystemState for the params you need
 let mut system_state: SystemState<(Res<AssetServer>, Query<&Transform>)> = 
     SystemState::new(&mut world);
 
-// Get access to the params
 let (asset_server, query) = system_state.get(&world);
 
-// Use them just like in a system
 for transform in query.iter() {
-    // ...
+    // Use transform
 }
 ```
 
-**Benefits:**
-- Access system params from non-system code
-- Same caching as regular systems (fast repeated access)
-- Eliminates need for costly abstractions like WorldCell
-- Perfect for direct World manipulation
+This is useful for:
+- Direct world manipulation outside systems
+- Tools and editor code
+- Custom execution patterns
 
-This is a game-changer for advanced World access patterns!
-
-### Sub Apps
-
-**Added in Bevy 0.6**
-
-Sub-apps enable separate app instances with their own schedules:
-
-```rust
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, AppLabel)]
-pub struct RenderApp;
-
-let mut render_app = App::empty();
-
-// Add render app as a sub-app
-app.add_sub_app(RenderApp, render_app, |app_world, render_app| {
-    // Execute logic here
-});
-
-// Later, access the sub-app
-app.sub_app_mut(RenderApp)
-    .add_system(render_system)
-    .add_system(another_render_system);
-```
-
-The new renderer uses this for strict separation between the main app and render app.
-
-### Hierarchy Functions
-
-**Added in Bevy 0.6**
-
-Convenient functions for managing entity hierarchies:
-
-```rust
-// Despawn all descendants (children, grandchildren, etc.)
-commands.entity(parent).despawn_descendants();
-
-// Remove specific children from an entity
-commands.entity(parent).remove_children(&[child1, child2]);
-```
-
-## Other System Features
-
-### Empty Systems
-
-For the hyper-minimalists:
-
-```rust
-fn system() {
-    // do something
-}
-```
-
-### With/Without Filters
-
-**Bevy 0.1-0.3 (confusing nested syntax):**
-```rust
-// Filters were intermingled with components
-fn system(query: Query<With<A, Without<B, (&Transform, Changed<Velocity>)>>>) {
-    // Hard to tell what's a filter vs what's a component!
-}
-```
-
-**Bevy 0.4+ (separated filters):**
-```rust
-// Query filters are now separate from components
-fn system(query: Query<(&Transform, &Velocity), (With<A>, Without<B>, Changed<Velocity>)>) {
-    // Much clearer! Second tuple is filters only
-}
-
-// Query without filters
-fn system(query: Query<(&Transform, &Velocity)>) {
-    // Clean and simple
-}
-```
-
-Benefits of the new syntax:
-- Clearer what the query returns vs what it filters on
-- Can filter on `Changed<Velocity>` without retrieving Velocity
-- Can create type aliases for reusable filters:
-
-```rust
-type MovingEntities = (With<A>, Without<B>, Changed<Velocity>);
-
-fn system(query: Query<(&Transform, &Velocity), MovingEntities>) {
-    // Reusable filter!
-}
-```
-
-### Thread-Local Systems
-
-Systems that must run on the main thread with exclusive access to World and Resources:
-
-```rust
-fn system(world: &mut World, resources: &mut Resources) {
-    // do something
-}
-```
-
-## Stages
-
-The scheduler provides Stages as a way to run sets of systems in order:
-
-```rust
-fn main() {
-    App::build()
-        // adds a system to the default stage: "update"
-        .add_system(movement.system())
-        // creates a new stage after "update"
-        .add_stage_after("update", "do_things")
-        .add_system_to_stage("do_things", something.system())
-}
-```
+SystemState caches internal data like regular systems, making repeated access fast.
 
 ## Commands
 
-Use Commands to queue up World and Resource changes, which will be applied at the end of the current Stage.
+Commands queue world changes that are applied at the end of each stage:
 
-**Bevy 0.5 Commands API:**
+```rust
+fn spawn_enemies(mut commands: Commands) {
+    commands.spawn((
+        Enemy,
+        Health { current: 100.0, max: 100.0 },
+        Transform::from_xyz(10.0, 0.0, 0.0),
+    ));
+}
+```
+
+### Spawning Entities
 
 ```rust
 fn system(mut commands: Commands) {
-    // Spawn entity with bundle
-    let entity = commands.spawn_bundle((Position(0.0), Velocity(1.0))).id();
+    // Spawn with a bundle
+    let entity = commands.spawn_bundle(EnemyBundle::default()).id();
     
-    // Spawn empty entity, then add components
+    // Spawn and add components incrementally
     commands.spawn()
-        .insert_bundle(MyBundle::default())
-        .insert(ExtraComponent);
-    
-    // Modify existing entity
-    commands.entity(entity)
-        .insert(NewComponent)
-        .remove::<OldComponent>();
-    
-    // Despawn entity
-    commands.entity(entity).despawn();
+        .insert_bundle((Position::default(), Velocity::default()))
+        .insert(Enemy);
 }
 ```
 
-**Changes from Bevy 0.4:**
-- `spawn()` no longer accepts parameters - use `spawn_bundle(bundle)` or `spawn().insert_bundle(bundle)`
-- `with(component)` → `insert(component)`
-- `insert_one(entity, component)` → `entity(entity).insert(component)`
-- `remove_one::<T>(entity)` → `entity(entity).remove::<T>()`
-- `current_entity()` → `id()` to get the spawned entity ID
-- Parameter changed back: `mut commands: Commands` (not `&mut`)
-
-The API is now consistent with the World API.
-
-## Flexible System Parameters
-
-**Added in Bevy 0.4**
-
-Prior to 0.4, system parameters had to be in a specific order ([Commands][Resources][Queries]), which was confusing and error-prone.
-
-**Bevy 0.1-0.3 (required order):**
-```rust
-// This compiled
-fn valid(commands: &mut Commands, time: Res<Time>, query: Query<&Transform>) {}
-
-// This failed to compile!
-fn invalid(query: Query<&Transform>, commands: &mut Commands, time: Res<Time>) {}
-```
-
-**Bevy 0.4+ (any order works!):**
-```rust
-// All of these work now!
-fn system1(query: Query<&Transform>, commands: &mut Commands, time: Res<Time>) {}
-fn system2(time: Res<Time>, query: Query<&Transform>, commands: &mut Commands) {}
-fn system3(commands: &mut Commands, query: Query<&Transform>, time: Res<Time>) {}
-```
-
-This was achieved by completely rewriting system generation using a new `SystemParam` trait. Benefits:
-- **~25% faster clean compile times**
-- **Any parameter order works**
-- **Easy to add new parameters** - just implement SystemParam
-- **Simpler implementation** - much easier to maintain
-
-## System Inputs, Outputs, and Chaining
-
-**Added in Bevy 0.4**
-
-Systems can now have inputs and outputs, enabling powerful patterns like error handling:
+### Modifying Entities
 
 ```rust
-fn main() {
-    App::build()
-        .add_system(result_system.system().chain(error_handler.system()))
-        .run();
-}
-
-fn result_system(query: Query<&Transform>) -> Result<(), MyError> {
-    let transform = query.get(SOME_ENTITY)?;
-    println!("found transform: {:?}", transform);
-    Ok(())
-}
-
-fn error_handler(In(result): In<Result<(), MyError>>) {
-    if let Err(err) = result {
-        println!("Error: {:?}", err);
+fn system(mut commands: Commands, query: Query<Entity, With<Defeated>>) {
+    for entity in query.iter() {
+        commands.entity(entity)
+            .insert(Despawning)
+            .remove::<Enemy>();
     }
 }
 ```
 
-The System trait signature:
+### Despawning Entities
+
 ```rust
-System<In = (), Out = ()>        // No inputs or outputs
-System<In = usize, Out = f32>    // Takes usize, returns f32
+fn cleanup(mut commands: Commands, query: Query<Entity, With<Despawning>>) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn();
+    }
+}
 ```
 
-This enables:
-- Error handling chains
-- Data pipelines between systems
-- Composable system logic
-
-## How Function Systems Work
-
-Being able to use Rust functions directly as systems might feel like magic, but it's not! When registering systems in your App:
+### Hierarchy Commands
 
 ```rust
-fn some_system() { }
+// Despawn an entity and all its descendants
+commands.entity(parent).despawn_descendants();
+
+// Remove specific children
+commands.entity(parent).remove_children(&[child1, child2]);
+```
+
+### Why Commands?
+
+Commands are deferred because immediate changes would invalidate iterators and cause race conditions in parallel systems. By queuing changes and applying them at stage boundaries, Bevy maintains safety and performance.
+
+## System Parameters
+
+Systems can accept any type implementing `SystemParam`:
+
+- `Query<T>` - Access entities with specific components
+- `Res<T>`, `ResMut<T>` - Access global resources
+- `Commands` - Queue world changes
+- `Local<T>` - Per-system state
+- `EventReader<T>`, `EventWriter<T>` - Event handling
+- `Option<Res<T>>` - Optional resources
+- `Res<Assets<T>>` - Access asset collections
+
+Parameters can be in any order:
+
+```rust
+fn system(
+    query: Query<&Transform>,
+    mut commands: Commands,
+    time: Res<Time>,
+    assets: Res<Assets<Mesh>>
+) {
+    // All valid regardless of order
+}
+```
+
+## System Chaining
+
+Systems can have inputs and outputs, allowing data flow between systems:
+
+```rust
+fn producer(query: Query<&Transform>) -> Vec<Vec3> {
+    query.iter().map(|t| t.translation).collect()
+}
+
+fn consumer(In(positions): In<Vec<Vec3>>) {
+    for pos in positions {
+        println!("Position: {:?}", pos);
+    }
+}
 
 fn main() {
-    App::new()  // Changed from App::build() in 0.6
-        .add_system(some_system)  // .system() optional in 0.6!
+    App::new()
+        .add_system(producer.chain(consumer))
         .run();
 }
 ```
 
-**Changed in Bevy 0.6:**
-- `App::build()` → `App::new()` (AppBuilder merged into App)
-- `.system()` is now **optional**! You can still use it for configuration:
+This is useful for:
+- Error handling pipelines
+- Data transformation chains
+- Composing reusable system components
+
+## Sub Apps
+
+Large applications can be split into multiple sub-apps, each with their own schedule:
 
 ```rust
-// Both work in 0.6
-App::new()
-    .add_system(my_system)
-    .add_system(other_system.label("other"))  // Use .system() for config
-    .run();
+#[derive(AppLabel)]
+struct RenderApp;
+
+let mut render_app = App::empty();
+
+app.add_sub_app(RenderApp, render_app, |app_world, render_app| {
+    // Execute render logic
+});
 ```
 
-The `.system()` call (when used) converts the function pointer to a `Box<dyn System>`. This works because Bevy implements the `IntoQuerySystem` trait for all functions that match certain signatures.
+Bevy's renderer runs as a sub-app, maintaining strict separation between simulation and rendering. This enables features like pipelined rendering where the next frame's simulation runs while the current frame renders.
 
-## Performance Improvements in Bevy 0.2
+## Performance
 
-**Added in Bevy 0.2**
+Bevy ECS is designed for high performance:
 
-Several significant performance improvements were made to Bevy ECS:
+**Cache-friendly iteration** - Components are packed tightly in arrays. Iterating thousands of entities benefits from CPU cache prefetching.
 
-### Generational Entity IDs
+**Lock-free parallelism** - Systems run concurrently without atomic operations or locks. Bevy's scheduler uses compile-time analysis of system parameters to ensure safety.
 
-Entity IDs changed from random UUIDs to incrementing generational indices. Random UUIDs were nice because they could be created anywhere, were unique across game runs, and could be safely persisted to files or reused across networks. However, they ended up being too slow relative to the alternatives. The randomness had a measurable cost and entity locations had to be looked up using a hash map.
+**Minimal overhead** - Queries compile to direct memory access. No virtual dispatch, no dynamic allocations in hot paths.
 
-By moving to generational indices (using the hecs implementation), entity ids can be directly used as array indices, which makes entity location lookups lightning fast.
+**Generational entity IDs** - Entities use array indices for O(1) lookups instead of hash maps.
 
-### Read-Only Queries
-
-Read-only traits were implemented for queries that don't mutate anything. This allows guaranteeing that a query won't mutate anything, enabling further optimizations.
-
-### Removed Locking from World APIs
-
-This gives a significant speed boost. This can be done safely due to a combination of the new read-only queries and changing World mutation APIs to be a mutable World borrow.
-
-As a result of these optimizations, direct component lookup is much faster.
-
-## Performance Improvements in Bevy 0.3
-
-**Added in Bevy 0.3**
-
-Bevy 0.3 brought additional significant performance improvements:
-
-### Removed All Locks from Query Access
-
-By introducing QuerySets for conflicting queries, all atomic locks could be removed from query access. This makes queries exactly as fast as direct World access.
-
-### Removed Archetype Safety Checks
-
-Since queries are verified once during schedule construction, safety checks don't need to happen on every query access. This reduced overhead significantly.
-
-### Rewritten QueryIter
-
-QueryIter was completely rewritten to be simpler and more optimizable. This resolved performance inconsistencies where some system patterns performed better than others. Now all query iteration is on the "fast path".
-
-### Upstream hecs Improvements
-
-Ported performance improvements from upstream hecs:
-- Improved iteration over heavily fragmented archetypes
-- Improved component insertion times
-
-### Benchmark Results
-
-**Entity Component Lookup** (per 100k operations, smaller is better):
-- Bevy 0.2: ~40-50ms with locks
-- Bevy 0.3: ~5-10ms without locks (5-10x faster!)
-
-**Component Insertion**: Improved significantly
-**Fragmented Iteration**: Much faster for complex archetype structures
-
-The query access improvements make Bevy ECS queries as fast as direct World access while maintaining safety through compile-time checks.
-
-## Built on Hecs
-
-Bevy ECS uses a heavily forked version of the minimalist Hecs ECS. Hecs is an efficient single-threaded archetypal ECS that provides the core World, Archetype, and internal Query data structures. Bevy ECS adds on top:
-
-- **Function Systems**: Hecs has no concept of a "system" at all - you just run queries directly on the World. Bevy adds portable, schedulable systems using normal Rust functions.
-- **Resources**: Hecs has no concept of unique/global data. Bevy adds a Resource collection and resource queries.
-- **Parallel Scheduler**: Hecs is single threaded. Bevy ECS adds a custom dependency-aware scheduler.
-- **Optimization**: By modifying internal data access patterns, Bevy improved performance significantly.
-- **Query Wrappers**: Bevy's Query provides safe, scoped access to the World in a multi-threaded context with improved ergonomics.
-- **Change Detection**: Automatically and efficiently tracks component add/remove/update operations.
-- **Entity IDs**: In Bevy 0.1, entity ids were globally unique UUIDs suitable for serialization. In Bevy 0.2, this changed to generational indices for better performance, using direct array indexing for lookups.
+According to ecs_bench benchmarks, Bevy ECS is among the fastest Rust ECS implementations for iteration, spawning, and component access.
 

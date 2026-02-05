@@ -1,248 +1,284 @@
-# Physically Based Rendering (PBR)
+# Physically Based Rendering
 
-**Added in Bevy 0.5**
+Bevy uses Physically Based Rendering (PBR) for 3D graphics. PBR simulates how light behaves in the real world, producing materials that look correct under any lighting condition.
 
-Bevy now uses Physically Based Rendering (PBR) for 3D graphics. PBR is a semi-standard approach that attempts to use approximations of real-world "physically based" lighting and material properties.
+## Understanding PBR
 
-## What is PBR?
+Traditional rendering uses ad-hoc formulas that work for specific cases but break down in complex lighting. PBR takes a different approach: model the physics of light interaction with surfaces. This creates materials that respond realistically to different light sources and environments.
 
-PBR aims to render materials in a way that looks correct under any lighting condition by modeling:
-- How light reflects off surfaces (specular reflection)
-- How light scatters within materials (subsurface scattering approximations)
-- How rough or smooth surfaces are (roughness)
-- Whether materials are metallic or non-metallic (metallic property)
+The technique models several key properties:
+- How light reflects off surfaces based on viewing angle
+- How surface roughness scatters reflected light
+- The difference between metals and non-metals
+- Energy conservation - surfaces never reflect more light than they receive
 
-Bevy's implementation is based on:
-- Filament PBR techniques (primary)
-- Unreal Engine ideas
-- Disney's principles
+This physical accuracy means artists can create materials that look right in any scene without per-lighting tweaks.
 
 ## StandardMaterial
 
-The `StandardMaterial` is Bevy's PBR material with the following properties:
+Bevy's PBR material provides properties that control appearance:
 
 ```rust
-commands.spawn_bundle(PbrBundle {
-    mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-    material: materials.add(StandardMaterial {
-        base_color: Color::rgb(0.8, 0.7, 0.6),
-        perceptual_roughness: 0.5,  // Renamed from "roughness" in 0.6
-        metallic: 0.0,
-        reflectance: 0.5,
-        emissive: Color::BLACK,
-        ..Default::default()
-    }),
-    ..Default::default()
-});
-```
-
-**Changed in Bevy 0.6:** The `roughness` field was renamed to `perceptual_roughness` to better reflect that it uses perceptual (not linear) roughness values.
-
-### Material Properties
-
-**base_color**: The base color of the material
-- Represents the perceived color in neutral lighting
-- Can be set as a solid color
-
-**perceptual_roughness**: How rough the surface is (0.0 to 1.0)
-- 0.0 = perfectly smooth/mirror-like
-- 1.0 = completely rough/matte
-- Uses perceptual roughness (more intuitive than linear)
-- Affects how light scatters when reflecting
-
-**metallic**: Whether the material is metallic (0.0 to 1.0)
-- 0.0 = non-metal (dielectric)
-- 1.0 = pure metal (conductor)
-- Affects how light reflects and the appearance of reflections
-
-**reflectance**: How reflective non-metallic surfaces are (0.0 to 1.0)
-- Only affects non-metallic materials (metallic = 0.0)
-- Common values: 0.5 for most materials
-- Higher values = more reflective
-
-**emissive**: Light emitted by the material
-- Color and intensity of light the material emits
-- Useful for glowing objects, screens, lights
-- Does not actually illuminate other objects (just visual)
-
-## Texture Support
-
-StandardMaterial supports multiple texture types:
-
-```rust
-materials.add(StandardMaterial {
-    base_color_texture: Some(asset_server.load("textures/color.png")),
-    normal_map_texture: Some(asset_server.load("textures/normal.png")),
-    metallic_roughness_texture: Some(asset_server.load("textures/metallic_roughness.png")),
-    occlusion_texture: Some(asset_server.load("textures/occlusion.png")),
-    emissive_texture: Some(asset_server.load("textures/emissive.png")),
-    ..Default::default()
-})
-```
-
-### Texture Types
-
-**base_color_texture**: Base color/albedo map
-- Contains the base color information
-- RGB channels for color, optional A for transparency
-
-**normal_map_texture**: Normal map for surface detail
-- Adds surface detail without additional geometry
-- Encodes surface normal directions in RGB
-
-**metallic_roughness_texture**: Combined metallic and roughness
-- Blue channel = metallic
-- Green channel = roughness
-- Efficient: combines two properties in one texture
-
-**occlusion_texture**: Ambient occlusion
-- Simulates soft shadows in crevices and corners
-- Darkens areas where ambient light would be blocked
-
-**emissive_texture**: Emissive/glow map
-- Defines which parts of the material glow
-- RGB for color and intensity
-
-## Lighting
-
-PBR materials require proper lighting to look their best.
-
-### Point Lights
-
-**Changed in Bevy 0.6:** `Light` and `LightBundle` were renamed to `PointLight` and `PointLightBundle`.
-
-```rust
-// Point light
-commands.spawn_bundle(PointLightBundle {
-    point_light: PointLight {
-        intensity: 1500.0,
-        color: Color::rgb(1.0, 0.9, 0.8),
-        range: 20.0,
-        ..Default::default()
-    },
-    transform: Transform::from_translation(Vec3::new(4.0, 5.0, 4.0)),
-    ..Default::default()
-});
-```
-
-### Directional Lights
-
-```rust
-// Directional light (sun)
-commands.spawn_bundle(DirectionalLightBundle {
-    directional_light: DirectionalLight {
-        color: Color::rgb(1.0, 1.0, 1.0),
-        illuminance: 10000.0,
-        ..Default::default()
-    },
-    transform: Transform::from_rotation(Quat::from_euler(
-        EulerRot::XYZ,
-        -std::f32::consts::FRAC_PI_4,
-        std::f32::consts::FRAC_PI_4,
-        0.0,
-    )),
-    ..Default::default()
-});
-```
-
-### Shadows
-
-**Added in Bevy 0.6**
-
-Both directional and point lights now support shadows!
-
-```rust
-// Point light with shadows
-commands.spawn_bundle(PointLightBundle {
-    point_light: PointLight {
-        intensity: 1500.0,
-        shadows_enabled: true,  // Enable shadows
-        ..Default::default()
-    },
-    ..Default::default()
-});
-
-// Directional light with shadows
-commands.spawn_bundle(DirectionalLightBundle {
-    directional_light: DirectionalLight {
-        illuminance: 10000.0,
-        shadows_enabled: true,  // Enable shadows
-        ..Default::default()
-    },
-    ..Default::default()
-});
-```
-
-Shadows significantly enhance realism by showing where objects block light. The new renderer in 0.6 supports efficient shadow mapping for both light types.
-
-## PBR Example
-
-Bevy includes a PBR example that demonstrates different material properties:
-
-```rust
-fn setup(
+fn spawn_metal_sphere(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<StandardMaterial>>
 ) {
-    let sphere_mesh = meshes.add(Mesh::from(shape::Icosphere {
-        radius: 1.0,
-        subdivisions: 32,
-    }));
-
-    // Create spheres with varying metallic and roughness values
-    for metallic in 0..4 {
-        for roughness in 0..4 {
-            commands.spawn_bundle(PbrBundle {
-                mesh: sphere_mesh.clone(),
-                material: materials.add(StandardMaterial {
-                    base_color: Color::rgb(0.8, 0.7, 0.6),
-                    metallic: metallic as f32 / 3.0,
-                    roughness: roughness as f32 / 3.0,
-                    ..Default::default()
-                }),
-                transform: Transform::from_xyz(
-                    metallic as f32 * 2.5 - 3.75,
-                    0.0,
-                    roughness as f32 * 2.5 - 3.75,
-                ),
-                ..Default::default()
-            });
-        }
-    }
-
-    // Add a light
-    commands.spawn_bundle(LightBundle {
-        transform: Transform::from_translation(Vec3::new(0.0, 5.0, 5.0)),
-        ..Default::default()
-    });
-
-    // Add a camera
-    commands.spawn_bundle(PerspectiveCameraBundle {
-        transform: Transform::from_xyz(0.0, 6.0, 12.0)
-            .looking_at(Vec3::ZERO, Vec3::Y),
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::UVSphere {
+            radius: 1.0,
+            ..Default::default()
+        })),
+        material: materials.add(StandardMaterial {
+            base_color: Color::rgb(0.8, 0.7, 0.6),
+            metallic: 1.0,
+            perceptual_roughness: 0.2,
+            reflectance: 0.5,
+            ..Default::default()
+        }),
+        transform: Transform::from_xyz(0.0, 1.0, 0.0),
         ..Default::default()
     });
 }
 ```
 
-## Visual Quality
+## Material Properties
 
-PBR provides:
-- **Consistent appearance** across different lighting conditions
-- **Physically accurate** light interactions
-- **Energy conservation** (materials don't reflect more light than they receive)
-- **Predictable results** when authoring materials
-- **Industry standard** workflow (same as Unreal, Unity, etc.)
+### Base Color
 
-## Tips for Good PBR Materials
+The fundamental color of the material in neutral lighting:
 
-1. **Use reference images** - Real-world materials for inspiration
-2. **Roughness is key** - Few real materials are perfectly smooth
-3. **Metallic is binary** - Materials are usually 0.0 or 1.0, rarely in between
-4. **Mind your albedo** - Base colors should be in realistic ranges
-5. **Use proper texture maps** - Normal maps add detail without geometry cost
-6. **Light your scenes well** - PBR needs good lighting to shine
+```rust
+material.base_color = Color::rgb(0.8, 0.2, 0.2);  // Red material
+```
 
-PBR is the foundation of modern 3D rendering in Bevy and enables creating visually impressive, realistic 3D games and applications.
+This represents what color the surface appears to be. For metals, base color includes the metallic tint. For non-metals, it's the perceived color.
+
+### Metallic
+
+Controls whether the material behaves as metal or non-metal:
+
+```rust
+material.metallic = 0.0;  // Non-metal (wood, plastic, stone)
+material.metallic = 1.0;  // Metal (iron, gold, copper)
+```
+
+Real-world materials are usually fully one or the other. Intermediate values exist for transitions (rust, weathering) but are rarely the base state.
+
+Metals have these properties:
+- Reflect colored light based on base color
+- No diffuse reflection
+- Strong specular highlights
+
+Non-metals (dielectrics):
+- Reflect white/colorless light
+- Have diffuse reflection
+- Weaker specular highlights
+
+### Roughness
+
+How smooth or rough the surface is:
+
+```rust
+material.perceptual_roughness = 0.0;  // Mirror smooth
+material.perceptual_roughness = 0.5;  // Semi-rough
+material.perceptual_roughness = 1.0;  // Completely matte
+```
+
+Smooth surfaces produce sharp, focused reflections. Rough surfaces scatter reflected light, creating broader, dimmer highlights. Few real materials are perfectly smooth - even polished metal has microscopic roughness.
+
+### Reflectance
+
+Controls how reflective non-metallic surfaces are:
+
+```rust
+material.reflectance = 0.5;  // Standard (most materials)
+material.reflectance = 0.35; // Less reflective (cloth, leather)
+material.reflectance = 0.7;  // More reflective (glass, water)
+```
+
+This only affects non-metals. Most common materials fall around 0.4-0.6.
+
+### Emissive
+
+Light emitted by the surface:
+
+```rust
+material.emissive = Color::rgb(1.0, 0.5, 0.0);  // Orange glow
+```
+
+Emissive materials appear to glow. This is visual only - they don't actually illuminate other objects. Use it for screens, light strips, glowing eyes, or magical effects.
+
+## Textures
+
+Apply textures to add detail:
+
+```rust
+let material = materials.add(StandardMaterial {
+    base_color_texture: Some(asset_server.load("wood_color.png")),
+    normal_map_texture: Some(asset_server.load("wood_normal.png")),
+    metallic_roughness_texture: Some(asset_server.load("wood_mr.png")),
+    occlusion_texture: Some(asset_server.load("wood_ao.png")),
+    ..Default::default()
+});
+```
+
+Each texture type serves a specific purpose:
+
+**Base color texture** - The surface's color pattern (wood grain, brick pattern, etc.)
+
+**Normal map** - Adds surface detail like bumps and grooves without changing geometry. The GPU uses this to modify lighting calculations per-pixel.
+
+**Metallic/roughness texture** - Combines metallic (blue channel) and roughness (green channel) in one texture. This lets different areas have different material properties.
+
+**Occlusion texture** - Simulates ambient shadows in crevices and corners. Darkens areas where ambient light would be blocked.
+
+**Emissive texture** - Defines which parts glow and their color.
+
+## Lighting for PBR
+
+PBR materials need proper lighting to show their properties. Use multiple light types:
+
+```rust
+fn setup_lighting(mut commands: Commands) {
+    // Directional light (sun)
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            illuminance: 10000.0,
+            shadows_enabled: true,
+            ..Default::default()
+        },
+        transform: Transform::from_rotation(Quat::from_euler(
+            EulerRot::XYZ,
+            -0.7,
+            0.5,
+            0.0,
+        )),
+        ..Default::default()
+    });
+    
+    // Fill light for softer shadows
+    commands.spawn(PointLightBundle {
+        point_light: PointLight {
+            intensity: 2000.0,
+            color: Color::rgb(1.0, 0.9, 0.8),
+            ..Default::default()
+        },
+        transform: Transform::from_xyz(-5.0, 5.0, 5.0),
+        ..Default::default()
+    });
+}
+```
+
+Shadows significantly enhance realism by showing spatial relationships between objects.
+
+## Visualizing Material Properties
+
+Create a grid of spheres showing different metallic and roughness combinations:
+
+```rust
+fn spawn_material_grid(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>
+) {
+    let sphere_mesh = meshes.add(Mesh::from(shape::UVSphere {
+        radius: 0.4,
+        sectors: 32,
+        stacks: 16,
+    }));
+    
+    for x in 0..5 {
+        for z in 0..5 {
+            let metallic = x as f32 / 4.0;
+            let roughness = z as f32 / 4.0;
+            
+            commands.spawn(PbrBundle {
+                mesh: sphere_mesh.clone(),
+                material: materials.add(StandardMaterial {
+                    base_color: Color::rgb(0.8, 0.7, 0.6),
+                    metallic,
+                    perceptual_roughness: roughness,
+                    ..Default::default()
+                }),
+                transform: Transform::from_xyz(
+                    x as f32 * 2.0 - 4.0,
+                    0.0,
+                    z as f32 * 2.0 - 4.0,
+                ),
+                ..Default::default()
+            });
+        }
+    }
+}
+```
+
+This creates a 5x5 grid. Each row has constant metallic values from 0.0 to 1.0. Each column has constant roughness from 0.0 to 1.0. The resulting grid shows how these properties interact.
+
+## Common Materials
+
+**Polished metal:**
+```rust
+StandardMaterial {
+    base_color: Color::rgb(0.7, 0.7, 0.7),
+    metallic: 1.0,
+    perceptual_roughness: 0.1,
+    ..Default::default()
+}
+```
+
+**Rough stone:**
+```rust
+StandardMaterial {
+    base_color: Color::rgb(0.5, 0.5, 0.5),
+    metallic: 0.0,
+    perceptual_roughness: 0.9,
+    ..Default::default()
+}
+```
+
+**Painted plastic:**
+```rust
+StandardMaterial {
+    base_color: Color::rgb(0.8, 0.2, 0.2),
+    metallic: 0.0,
+    perceptual_roughness: 0.3,
+    ..Default::default()
+}
+```
+
+**Glowing screen:**
+```rust
+StandardMaterial {
+    base_color: Color::BLACK,
+    emissive: Color::rgb(0.0, 0.8, 1.0),
+    ..Default::default()
+}
+```
+
+## Best Practices
+
+**Use reference photos** - Study real materials to understand their properties. Metals have colored reflections. Most materials are rougher than you think.
+
+**Roughness variation** - Real surfaces have varying roughness. Use roughness maps to add detail even to simple geometry.
+
+**Conservative albedo** - Base colors should fall in realistic ranges. Pure white or black materials are rare in nature.
+
+**Metallic is binary** - Most materials are clearly metal or non-metal. Only use intermediate values for transitions like rust or corrosion.
+
+**Light your scenes** - PBR needs varied lighting to show material properties. Use multiple light sources with different colors and intensities.
+
+**Test under different lighting** - Materials should look good in various lighting conditions. That's the promise of PBR.
+
+## Technical Implementation
+
+Bevy's PBR implementation draws from industry-standard techniques:
+- Cook-Torrance specular BRDF (Bidirectional Reflectance Distribution Function)
+- Disney diffuse BRDF
+- Image-based lighting support
+- Screen-space reflections (when available)
+
+These techniques ensure materials behave correctly under complex lighting while remaining computationally efficient.
+
+PBR is the foundation of realistic 3D rendering in Bevy. Understanding metallic, roughness, and proper lighting lets you create convincing materials for any type of 3D game or application.
 

@@ -1,139 +1,216 @@
 # Productive Compile Times
 
-One of Bevy's primary design goals is "productivity". Game development is an extremely iterative and experimental process full of small changes. If each change takes a significant amount of time to test, then development becomes a grind.
+Game development demands rapid iteration. Change code, test it, change again. If compilation takes too long, this creative flow breaks down. Bevy prioritizes fast iterative compilation to keep you productive.
 
-## Acceptability Scale for Iterative Changes
+## The Iteration Speed Problem
 
-- **0-1 seconds**: ideal
-- **1-3 seconds**: fine
-- **3-5 seconds**: annoying
-- **5-10 seconds**: painful but still usable if you are committed
-- **10+ seconds**: completely unusable
+How long can you wait before testing changes?
 
-> **Note**: These are "iterative compile times" not "clean compile times". Clean compiles only need to happen once, whereas iterative compiles happen constantly.
+- **0-1 seconds** - Feels instant, maintains flow state
+- **1-3 seconds** - Noticeable but acceptable
+- **3-5 seconds** - Starts to break concentration
+- **5-10 seconds** - Enough time to lose your train of thought
+- **10+ seconds** - Completely disrupts workflow
 
-## Current Performance
+These thresholds are for iterative compiles - recompiling after small changes. Clean builds from scratch can take longer since they happen rarely.
 
-Currently, with the "fast compiles" configuration, changes to Bevy examples can be compiled in ~0.8-3 seconds, based on your computer specs, configuration, and OS choice. Bevy falls into the "ideal to fine" range.
+Bevy aims for the 0-3 second range with proper configuration.
 
 ## Why Rust Compiles Slowly
 
-Rust code generally compiles slowly for three reasons:
+Rust's design choices prioritize runtime performance over compile speed:
 
-1. **Generic Monomorphization**: The compile step where generic code gets turned into a non-generic copy. Compile times go up as the volume of monomorphized code goes up. To keep costs low you should either avoid generics entirely or keep generic code "small" and shallow.
+**Monomorphization** - Generic code generates specialized versions for each type used. More generics mean more code to compile.
 
-2. **Link Time**: How long it takes to link code. Here the important thing is to keep code volume and dependency counts low.
+**Link time** - Combining compiled code into an executable takes time, especially with many dependencies.
 
-3. **LLVM**: Rust throws large amounts of IR code at LLVM and expects it to optimize it. This takes time. Additionally LLVM is optimized for "fast code at runtime" more than "fast code generation".
+**LLVM optimization** - The compiler spends time optimizing code for maximum runtime performance.
 
-## The Challenges
+These choices make Rust programs fast to run but slow to compile.
 
-The cards are stacked against game engines:
+## Game Engine Challenges
 
-**The Game Engine Domain:**
-- Game engines inherently touch a large number of domains (and therefore involve a large number of dependencies)
-- Game engines are "big" - they require a lot of code
+Game engines face particular compilation difficulties:
 
-**Rust's Design Choices:**
-- Dependencies are statically linked by default, which means every new dependency adds link times
-- Rust's default linker is quite slow
-- Cargo makes taking dependencies very easy. What appears to be a small, simple crate might actually have a large dependency tree
+**Broad scope** - Engines touch graphics, audio, physics, networking, and more. Each domain adds dependencies.
 
-## Bevy's Approach
+**Large codebases** - Comprehensive engines require substantial code.
 
-Bevy takes a pragmatic approach. Being willing to take dependencies is good for the Rust ecosystem - we don't want to ignore all the great work that has already been done, especially when it comes to projects like winit and wgpu. But we still strive to keep our dependency tree as small as we can. Any dependency that takes Bevy out of the "ideal to fine" iterative compile time range must either be pared down or removed.
+**Rich type systems** - Complex generic APIs provide flexibility but increase compilation work.
 
-## The "Fast Compiles" Configuration
+**Static linking** - Dependencies link into your binary, each one adding to link time.
 
-The "fast compiles" configuration achieves usable iterative compile times while still taking dependencies. It consists of three parts:
+Rust makes dependencies easy to add, but each one carries compilation cost.
 
-1. **LLD linker**: LLD is much faster at linking than the default Rust linker. This is the biggest win.
+## Bevy's Strategy
 
-2. **Dynamic Linking** (Bevy 0.4+): Link Bevy as a shared library for development.
-
-3. **Incremental compilation**: Use Cargo's incremental compilation for better caching.
-
-## Dynamic Linking
-
-**Added in Bevy 0.4**
-
-Dynamic linking significantly reduces iterative compile times during development:
-
-```bash
-# For your Bevy app
-cargo run --features bevy/dynamic
-
-# For Bevy examples  
-cargo run --features dynamic --example my_example
-```
-
-### Performance Impact
-
-**Example: Recompiling 3d_scene after a change**
-- Static linking: ~30 seconds
-- **Dynamic linking: ~4 seconds**
-
-**7-8x faster iteration!**
-
-### How It Works
-
-With dynamic linking, Bevy's engine code is compiled into a shared library (`.so`, `.dylib`, `.dll`). When you change your game code:
-- ✅ Only your code recompiles
-- ✅ Engine code is reused
-- ✅ Much faster linking
-
-### When to Use
-
-✅ **Use during development:**
-- Rapid iteration
-- Testing changes
-- Daily development work
-
-❌ **Don't use for release:**
-- Publishing your game
-- Final distribution
-- Release builds
-
-Disable the feature when building your final game binary!
-
-### Trade-offs
-
-**Pros:**
-- 👍 7-8x faster iterative compiles
-- 👍 Faster linking
-- 👍 Quick iteration cycle
-
-**Cons:**
-- 👎 Slightly larger debug builds
-- 👎 Requires managing shared libraries
-- 👎 Not suitable for distribution
-
-Combined with LLD linker and other optimizations, this keeps Bevy in the "ideal to fine" compile time range!
-
-2. **Nightly Rust Compiler**: Gives access to the latest performance improvements and "unstable" optimizations. Note that Bevy can still be compiled on stable Rust if that is a requirement for you.
-
-3. **Generic Sharing**: Allows crates to share monomorphized generic code instead of duplicating it. In some cases this allows us to "precompile" generic code so it doesn't affect iterative compiles.
-
-## Setup
-
-To enable fast compiles:
-1. Install the nightly rust compiler
-2. Install LLD
-3. Copy the fast compiles config file to YOUR_WORKSPACE/.cargo/config
-
-## Current Limitations
-
-**MacOS**: doesn't have an up-to-date version of the LLD linker, so iterative compiles are slower on that platform.
-
-**Windows**: LLD is slightly slower on Windows than on Linux.
-
-## Future Improvements
+Bevy uses several techniques to maintain fast iteration:
 
 ### Dynamic Linking
 
-An easy way to cut down on link times is to dynamically link. Bevy can support dynamic App plugins to achieve ~0.6 second iterative compile times. The new Bevy ECS currently doesn't support dynamic linking because it relies on TypeIds (which are incompatible with dynamic linking). However, this problem has been solved in other projects and will be added back soon.
+Enable dynamic linking during development:
 
-### Cranelift Rustc Backend
+```bash
+cargo run --features bevy/dynamic
+```
 
-Cranelift is an alternative compiler backend optimized for fast compiles. The rustc cranelift backend is rapidly approaching a usable state and should provide a nice boost eventually.
+This compiles Bevy as a shared library. When you change your game code, only your code recompiles - the engine library is reused.
+
+**Impact:**
+- Normal iteration: 20-30 seconds
+- With dynamic linking: 3-4 seconds
+- **7-8x faster**
+
+Use dynamic linking for daily development. Disable it for release builds - shipping games should link statically for better performance and simpler distribution.
+
+### Fast Linker
+
+The default Rust linker is slow. LLD (LLVM's linker) is much faster.
+
+**On Linux:**
+```bash
+sudo apt install lld
+```
+
+**On Windows:**
+LLD comes with Rust.
+
+**Configure in `.cargo/config.toml`:**
+```toml
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+```
+
+This single change significantly reduces link time.
+
+### Incremental Compilation
+
+Cargo's incremental compilation reuses work from previous builds:
+
+```toml
+[profile.dev]
+incremental = true
+```
+
+This is enabled by default in debug builds. It caches compilation results, making subsequent builds faster.
+
+### Optimized Build Profiles
+
+Configure different optimization levels for dependencies vs your code:
+
+```toml
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev]
+opt-level = 1
+```
+
+This compiles dependencies with full optimization (once) but your code with minimal optimization (fast to compile). Your code iterates quickly while libraries remain performant.
+
+## Complete Configuration
+
+Create `.cargo/config.toml` in your project:
+
+```toml
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+
+[target.x86_64-pc-windows-gnu]
+linker = "rust-lld.exe"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+```
+
+Add to `Cargo.toml`:
+
+```toml
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+```
+
+With these settings and dynamic linking, Bevy achieves 1-4 second iterative compile times on most machines.
+
+## Platform Differences
+
+**Linux** - Best compile times. LLD works excellently.
+
+**Windows** - Good compile times. LLD is built-in but slightly slower than on Linux.
+
+**macOS** - Slower than Linux/Windows. macOS's default linker is less optimized, and LLD integration is less mature.
+
+## Development Workflow
+
+Optimize your workflow around fast compilation:
+
+**Use dynamic linking during development:**
+```bash
+cargo run --features bevy/dynamic
+```
+
+**Disable it for release builds:**
+```bash
+cargo build --release
+```
+
+**Use `cargo check` for syntax verification:**
+```bash
+cargo check
+```
+
+This validates code without generating executables - much faster when you just want to verify changes compile.
+
+**Keep your dependency tree lean** - Every dependency adds compilation time. Evaluate whether new dependencies are worth their cost.
+
+## Measuring Compile Time
+
+Track compilation performance:
+
+```bash
+cargo clean
+cargo build --timings
+```
+
+This generates a report showing where compilation time goes. Use it to identify slow dependencies or bottlenecks.
+
+## Future Improvements
+
+Rust compilation continues to get faster:
+
+**Cranelift backend** - Alternative compiler backend optimized for compilation speed over runtime performance. Good for debug builds.
+
+**Parallel front-end** - The Rust compiler is becoming more parallel, utilizing multiple CPU cores better.
+
+**Better caching** - Improved incremental compilation reduces redundant work.
+
+Bevy tracks these developments and adopts improvements as they mature.
+
+## Best Practices
+
+**Enable dynamic linking** - Use it for all development work.
+
+**Configure fast linking** - Set up LLD on your platform.
+
+**Optimize dependency builds** - Let Cargo optimize dependencies once while keeping your code fast to compile.
+
+**Use cargo check** - Verify code without full compilation when possible.
+
+**Profile occasionally** - Run `cargo build --timings` periodically to catch compilation regressions.
+
+**Keep dependencies minimal** - Each crate adds to build time. Only add dependencies that provide significant value.
+
+Fast iteration is essential for productive game development. Bevy's compilation optimizations keep you focused on creating rather than waiting.
 

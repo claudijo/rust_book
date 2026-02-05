@@ -1,96 +1,177 @@
-# Web Platform Support
+# Web Platform
 
-**Added in Bevy 0.2, Expanded in Bevy 0.4**
+Bevy games run in web browsers through WebAssembly and WebGL. Deploy your game to reach players without downloads or installation.
 
-Bevy now runs on the web with full rendering support!
+## WebAssembly Compilation
 
-## Bevy 0.2: Initial Support
+Rust compiles to WebAssembly, a binary format that runs in browsers at near-native speeds. Bevy leverages this to bring full-featured games to the web.
 
-Initial WASM support provided:
-- Bevy ECS schedules
-- Input events
-- Canvas creation
-- Single-threaded task scheduling
-
-## Bevy 0.4: WebGL2 Rendering
-
-**Added in Bevy 0.4**
-
-Bevy now has a complete WebGL2 render backend! You can run Bevy games in the browser with full 2D and 3D rendering.
-
-### What Works
-
-- ✅ ECS schedules
-- ✅ Input events (keyboard, mouse, touch)
-- ✅ **2D and 3D rendering** (WebGL2)
-- ✅ Asset loading via HTTP
-- ✅ UI rendering
-- ✅ Text rendering
-- ✅ Sprite rendering
-- ✅ PBR materials
-
-### Current Limitations
-
-- ⚠️ Multi-threading limited (single-threaded task scheduler)
-- ⚠️ Audio support limited
-
-## Running Bevy on Web
-
-Check out the Bevy WebGL2 Showcase website which demonstrates various Bevy examples and games running in the browser.
-
-### Building for Web
+Add the WebAssembly target:
 
 ```bash
-# Add WASM target
 rustup target add wasm32-unknown-unknown
-
-# Build your game for web
-cargo build --target wasm32-unknown-unknown --release
-
-# Serve and test locally
-# (use a tool like basic-http-server or python -m http.server)
 ```
 
-### WASM Asset Loading
+Build your game for web:
 
-**Added in Bevy 0.3**
+```bash
+cargo build --release --target wasm32-unknown-unknown
+```
 
-You can now load assets in WASM just like on any other platform:
+This produces a `.wasm` file that browsers can execute.
+
+## WebGL Rendering
+
+Browsers provide WebGL for 3D graphics. Bevy's rendering system works through WebGL2, enabling the same graphics capabilities as desktop:
+
+- 2D and 3D rendering
+- PBR materials
+- Lighting and shadows
+- UI and text
+- Sprites and textures
+
+Your rendering code works identically on web and desktop. Bevy handles the platform differences internally.
+
+## Asset Loading
+
+Web assets load over HTTP:
 
 ```rust
-asset_server.load("sprite.png");
+fn load_assets(asset_server: Res<AssetServer>) {
+    let texture = asset_server.load("player.png");
+    let model = asset_server.load("spaceship.gltf");
+}
 ```
 
-If the asset hasn't already been loaded, this makes a `fetch()` request to retrieve the asset over HTTP. The AssetIo trait (added in 0.3) provides the abstraction that enables different storage backends:
-- Desktop: Filesystem
-- Android: Android Asset Manager
-- WASM: HTTP fetch() requests
+The asset server makes fetch requests when loading web builds. This is transparent - use the same API as desktop platforms.
 
-## Current Limitations
+Host assets alongside your WebAssembly file so the browser can retrieve them.
 
-It's important to note that there are still missing pieces:
-- 2D/3D rendering (not yet supported)
-- Multi-threading (not yet supported)
-- Sound (not yet supported)
+## Input Handling
 
-## First WASM Bevy Game
+Web input works through browser APIs:
 
-Despite the limitations, @mrk-its built the first WASM Bevy game: **bevy-robbo**
+```rust
+fn handle_input(
+    keyboard: Res<Input<KeyCode>>,
+    mouse: Res<Input<MouseButton>>,
+    touches: Res<Touches>
+) {
+    if keyboard.pressed(KeyCode::Space) {
+        // Handle keyboard
+    }
+    
+    if mouse.just_pressed(MouseButton::Left) {
+        // Handle mouse
+    }
+    
+    for touch in touches.iter() {
+        // Handle touch on mobile browsers
+    }
+}
+```
 
-The game uses Bevy for game logic and works around the render limitations by passing ASCII art game state from Bevy systems to JavaScript functions for rendering.
+Keyboard, mouse, and touch events all work normally. The same input code runs on desktop, mobile, and web.
 
-## Try It Yourself
+## HTML Integration
 
-You can experiment with Bevy WASM examples by following the instructions in the Bevy repository.
+Embed your game in a web page:
 
-## Implementation Details
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Bevy Game</title>
+    <style>
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="bevy-canvas"></canvas>
+    <script type="module">
+        import init from './my_game.js';
+        init('./my_game_bg.wasm');
+    </script>
+</body>
+</html>
+```
 
-The web support includes:
-- WASM support for `bevy_winit`
-- Canvas creation under WebAssembly
-- Single-threaded task scheduler for WebAssembly
+The canvas element displays your game. Standard HTML/CSS styling applies.
 
-## Future
+## Performance Considerations
 
-While the initial web support is limited, it represents a huge first step toward full web platform compatibility. Future versions will add rendering, multi-threading, and audio support.
+Web builds have unique constraints:
+
+**Download size matters** - Users wait for your game to download. Optimize WASM size with release builds and compression.
+
+**Browser limitations** - WebGL is less capable than native APIs. Test on target browsers and reduce complexity if needed.
+
+**No multi-threading** - Web builds run single-threaded due to browser restrictions. Design systems accordingly.
+
+**Memory limits** - Browsers impose memory limits. Monitor usage and unload unused assets.
+
+## Building for Production
+
+Optimize web builds:
+
+```bash
+# Build with optimizations
+cargo build --release --target wasm32-unknown-unknown
+
+# Further optimize with wasm-opt
+wasm-opt -Oz -o output.wasm input.wasm
+```
+
+Use tools like `wasm-bindgen` and `wasm-pack` to generate JavaScript bindings and optimize deployment.
+
+## Hosting
+
+Host your game on any static web server:
+- GitHub Pages
+- Netlify
+- Vercel
+- Amazon S3
+- Your own server
+
+Web builds are just static files - HTML, JavaScript, and WebAssembly. No special hosting requirements.
+
+## Browser Compatibility
+
+Modern browsers support WebAssembly and WebGL2:
+- Chrome, Edge - Excellent support
+- Firefox - Excellent support
+- Safari - Good support (some WebGL quirks)
+
+Test on multiple browsers. Provide fallback messages for unsupported browsers.
+
+## Limitations
+
+Web platforms have inherent constraints:
+
+**Single-threaded execution** - Browsers restrict threading. Parallel task pools don't provide the same benefits as desktop.
+
+**Async complexity** - Everything loads asynchronously. Handle loading states appropriately.
+
+**No filesystem access** - Save data to browser storage or cloud services, not local files.
+
+**Performance overhead** - WebAssembly and WebGL add overhead compared to native execution.
+
+## Best Practices
+
+**Optimize asset sizes** - Compress textures, use efficient formats. Downloads affect load times.
+
+**Show loading progress** - Users need feedback while assets load. Provide loading screens or progress bars.
+
+**Test early** - Web constraints differ from desktop. Test web builds throughout development.
+
+**Handle different screen sizes** - Web builds run on diverse devices. Design responsive UIs.
+
+**Provide mobile support** - Many web players use mobile devices. Support touch controls.
+
+**Monitor performance** - Profile web builds separately. Optimization priorities differ from desktop.
+
+Web deployment makes your game accessible to anyone with a browser. Understanding platform constraints and optimizing accordingly creates smooth web experiences.
 

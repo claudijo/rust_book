@@ -1,10 +1,11 @@
 # Bevy Apps
 
-A Bevy App is the starting point for any Bevy program.
+A Bevy App is the entry point for any Bevy program. It manages your game's execution loop, plugin system, and core engine functionality.
 
-## The Simplest App
+## Creating an App
 
-**Bevy 0.6+:**
+The simplest Bevy app does nothing but immediately terminate:
+
 ```rust
 use bevy::prelude::*;
 
@@ -13,22 +14,9 @@ fn main() {
 }
 ```
 
-**Before 0.6:**
-```rust
-fn main() {
-    App::build().run();
-}
-```
+## Cross-Platform Support
 
-**Changed in Bevy 0.6:** `App::build()` → `App::new()`, and AppBuilder was merged into App.
-
-This App pulls in no features and literally does nothing. Running the program would just immediately terminate.
-
-## Cross-Platform Main Function
-
-**Added in Bevy 0.4**
-
-Most platforms (Windows, macOS, Linux, Web) work with normal main functions. However, some platforms (Android and iOS) require additional boilerplate. The `#[bevy_main]` attribute macro handles this automatically:
+Mobile platforms (Android and iOS) require platform-specific initialization code. Rather than writing this boilerplate yourself, use the `#[bevy_main]` attribute:
 
 ```rust
 use bevy::prelude::*;
@@ -41,63 +29,52 @@ fn main() {
 }
 ```
 
-This single code works on **all platforms**: Windows, macOS, Linux, Android, iOS, and Web!
+This works identically on all platforms: Windows, macOS, Linux, Android, iOS, and Web. The macro automatically generates the necessary platform-specific code at compile time.
 
-**Without `#[bevy_main]`:** You'd need platform-specific boilerplate for mobile platforms.
+## Default Plugins
 
-**With `#[bevy_main]`:** The macro inserts the necessary boilerplate automatically, enabling true "write once, run anywhere" for Bevy apps.
+The `DefaultPlugins` group includes everything you need for a complete game:
 
-## Adding Default Plugins
-
-**Bevy 0.5-0.6:**
 ```rust
 fn main() {
-    App::new()  // Changed from App::build() in 0.6
+    App::new()
         .add_plugins(DefaultPlugins)
         .run();
 }
 ```
 
-**Bevy 0.3-0.4:**
-```rust
-fn main() {
-    App::build()
-        .add_plugins(DefaultPlugins)
-        .run();
-}
-```
-
-`DefaultPlugins` is a PluginGroup that adds all core features: 2D/3D renderer, asset loading, UI system, windows, input, etc.
+This adds the 2D/3D renderer, asset loading, UI system, windowing, input handling, audio, and more.
 
 ## Plugin Groups
 
-**Added in Bevy 0.3**
-
-PluginGroups are ordered collections of plugins that can be individually enabled or disabled:
+Plugin groups organize related plugins and allow selective configuration. You can disable individual plugins from a group:
 
 ```rust
-// Use all default plugins
-app.add_plugins(DefaultPlugins);
-
-// Disable specific plugins in a group
-app.add_plugins_with(DefaultPlugins, |group| {
-    group.disable::<RenderPlugin>()
-         .disable::<AudioPlugin>()
-});
+fn main() {
+    App::new()
+        .add_plugins_with(DefaultPlugins, |group| {
+            group
+                .disable::<RenderPlugin>()  // Headless server
+                .disable::<AudioPlugin>()
+        })
+        .run();
+}
 ```
 
-### Creating Custom Plugin Groups
+### Custom Plugin Groups
 
-You can create your own plugin groups:
+Create your own plugin groups to organize game-specific functionality:
 
 ```rust
-pub struct MyGamePlugins;
+pub struct GameplayPlugins;
 
-impl PluginGroup for MyGamePlugins {
+impl PluginGroup for GameplayPlugins {
     fn build(&mut self, group: &mut PluginGroupBuilder) {
-        group.add(PhysicsPlugin)
-             .add(NetworkingPlugin)
-             .add(GameLogicPlugin);
+        group
+            .add(PhysicsPlugin)
+            .add(AIPlugin)
+            .add(NetworkingPlugin)
+            .add(SaveSystemPlugin);
     }
 }
 
@@ -124,24 +101,74 @@ fn main() {
 }
 ```
 
-## Creating Custom Plugins
+Use your custom plugin group:
 
-**Bevy 0.6+:**
 ```rust
-impl Plugin for MyGamePlugins {
-    fn build(&self, app: &mut App) {  // App instead of AppBuilder
-        app.add_system(my_system);
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_plugins(GameplayPlugins)
+        .run();
+}
+```
+
+## Creating Plugins
+
+Plugins encapsulate functionality that can be shared across projects. A plugin implements the `Plugin` trait:
+
+```rust
+pub struct PhysicsPlugin;
+
+impl Plugin for PhysicsPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            .add_system(apply_gravity)
+            .add_system(detect_collisions)
+            .add_system(resolve_collisions);
     }
 }
 ```
 
-**Before 0.6:**
+Add your plugin to the app:
+
 ```rust
-impl Plugin for MyGamePlugins {
-    fn build(&self, app: &mut AppBuilder) {
-        app.add_system(my_system.system());
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_plugin(PhysicsPlugin)
+        .run();
+}
+```
+
+### Why Plugins?
+
+Plugins provide several benefits:
+
+**Organization** - Group related systems and resources together
+**Reusability** - Share functionality across multiple projects
+**Modularity** - Enable/disable features easily
+**Dependencies** - Plugins can depend on other plugins
+
+### Plugin Configuration
+
+Plugins can accept configuration:
+
+```rust
+pub struct PhysicsPlugin {
+    pub gravity: f32,
+}
+
+impl Plugin for PhysicsPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            .insert_resource(Gravity(self.gravity))
+            .add_system(apply_gravity);
     }
 }
+
+// Use with custom configuration
+app.add_plugin(PhysicsPlugin { gravity: -9.8 });
+```
 ```
 
 All engine and game logic is built using plugins. You can create your own plugins to organize your code.

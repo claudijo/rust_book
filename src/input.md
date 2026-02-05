@@ -1,212 +1,295 @@
 # Input
 
-Bevy provides cross-platform input handling for keyboard, mouse, and gamepads.
+Games respond to player actions through input. Bevy provides a unified input system that works across platforms - keyboard, mouse, gamepads, and touch all use consistent APIs.
 
 ## Keyboard Input
 
-The `Input<KeyCode>` resource tracks keyboard state:
+The `Input<KeyCode>` resource tracks which keys are pressed. Query it in any system to respond to keyboard input:
 
 ```rust
-fn system(keys: Res<Input<KeyCode>>) {
-    if keys.pressed(KeyCode::Space) {
-        println!("Space is held down");
-    }
-    if keys.just_pressed(KeyCode::Return) {
-        println!("Enter was just pressed this frame");
+fn player_movement(
+    keyboard: Res<Input<KeyCode>>,
+    mut query: Query<&mut Transform, With<Player>>
+) {
+    for mut transform in query.iter_mut() {
+        if keyboard.pressed(KeyCode::W) {
+            transform.translation.y += 5.0;
+        }
+        if keyboard.pressed(KeyCode::S) {
+            transform.translation.y -= 5.0;
+        }
+        if keyboard.pressed(KeyCode::A) {
+            transform.translation.x -= 5.0;
+        }
+        if keyboard.pressed(KeyCode::D) {
+            transform.translation.x += 5.0;
+        }
     }
 }
 ```
 
-## Mouse Input
+The input system tracks three states for each key:
 
-Mouse button state and events:
+**pressed()** - Key is currently held down. Use for continuous actions like movement.
+
+**just_pressed()** - Key was pressed this frame. Use for discrete actions like jumping or shooting.
+
+**just_released()** - Key was released this frame. Use for actions that occur on release.
 
 ```rust
-fn system(mouse: Res<Input<MouseButton>>) {
+fn handle_actions(keyboard: Res<Input<KeyCode>>, mut events: EventWriter<JumpEvent>) {
+    if keyboard.just_pressed(KeyCode::Space) {
+        events.send(JumpEvent);
+    }
+}
+```
+
+## Alternative Key Bindings
+
+Often you want multiple keys to trigger the same action. The `any_pressed` method checks if any key in a set is pressed:
+
+```rust
+fn movement(keyboard: Res<Input<KeyCode>>, mut query: Query<&mut Transform>) {
+    for mut transform in query.iter_mut() {
+        // Move up with W or Up arrow
+        if keyboard.any_pressed([KeyCode::W, KeyCode::Up]) {
+            transform.translation.y += 5.0;
+        }
+        
+        // Move left with A or Left arrow
+        if keyboard.any_pressed([KeyCode::A, KeyCode::Left]) {
+            transform.translation.x -= 5.0;
+        }
+    }
+}
+```
+
+## Inspecting Pressed Keys
+
+Sometimes you need to know which keys are currently pressed:
+
+```rust
+fn debug_input(keyboard: Res<Input<KeyCode>>) {
+    for key in keyboard.get_pressed() {
+        println!("Currently pressed: {:?}", key);
+    }
+    
+    for key in keyboard.get_just_pressed() {
+        println!("Just pressed this frame: {:?}", key);
+    }
+    
+    for key in keyboard.get_just_released() {
+        println!("Just released this frame: {:?}", key);
+    }
+}
+```
+
+These iterators are useful for implementing text input, debug consoles, or key rebinding systems.
+
+## Mouse Input
+
+Mouse buttons work identically to keyboard keys:
+
+```rust
+fn shooting(
+    mouse: Res<Input<MouseButton>>,
+    mut commands: Commands
+) {
     if mouse.just_pressed(MouseButton::Left) {
-        println!("Left mouse button clicked");
+        // Fire weapon
+        commands.spawn(BulletBundle::default());
+    }
+    
+    if mouse.pressed(MouseButton::Right) {
+        // Aim down sights
+    }
+}
+```
+
+Common mouse buttons include `Left`, `Right`, `Middle`, and additional numbered buttons for gaming mice.
+
+## Mouse Position
+
+While `Input<MouseButton>` tracks button state, you need `Window` to get cursor position:
+
+```rust
+fn cursor_position(
+    windows: Res<Windows>,
+    camera_query: Query<(&Camera, &GlobalTransform)>
+) {
+    let window = windows.get_primary().unwrap();
+    
+    if let Some(cursor_pos) = window.cursor_position() {
+        println!("Cursor at: {:?}", cursor_pos);
+        
+        // Convert to world coordinates if needed
+        // (requires camera transform calculation)
     }
 }
 ```
 
 ## Gamepad Input
 
-**Added in Bevy 0.2, Enhanced in Bevy 0.6**
-
-The Bevy Input plugin now has cross-platform support for most controllers thanks to the gilrs library!
-
-### Gamepads Resource
-
-**Added in Bevy 0.6**
-
-The `Gamepads` resource automatically maintains a collection of connected gamepads:
+Gamepads work like keyboards but require iteration over connected controllers. The `Gamepads` resource tracks which controllers are plugged in:
 
 ```rust
-fn gamepad_system(gamepads: Res<Gamepads>) {
-    // Iterate all connected gamepads
-    for gamepad in gamepads.iter() {
-        println!("Gamepad {:?} is connected", gamepad);
-    }
-}
-```
-
-### Button Input
-
-```rust
-fn button_system(
-    gamepads: Res<Gamepads>, 
-    button_input: Res<Input<GamepadButton>>
+fn gamepad_input(
+    gamepads: Res<Gamepads>,
+    button_inputs: Res<Input<GamepadButton>>,
+    mut query: Query<&mut Transform, With<Player>>
 ) {
     for gamepad in gamepads.iter() {
-        if button_input.just_pressed(GamepadButton(*gamepad, GamepadButtonType::South)) {
-            println!("Button pressed on gamepad {:?}", gamepad);
+        if button_inputs.just_pressed(GamepadButton(gamepad, GamepadButtonType::South)) {
+            println!("Player {} pressed A/Cross", gamepad.id);
+        }
+        
+        if button_inputs.pressed(GamepadButton(gamepad, GamepadButtonType::West)) {
+            println!("Player {} holding X/Square", gamepad.id);
         }
     }
 }
 ```
 
-### Button Types
+Gamepad button types use generic names that map appropriately across controllers:
+- `South` - A on Xbox, Cross on PlayStation
+- `East` - B on Xbox, Circle on PlayStation  
+- `West` - X on Xbox, Square on PlayStation
+- `North` - Y on Xbox, Triangle on PlayStation
 
-Gamepad buttons include:
-- Face buttons (A, B, X, Y / Cross, Circle, Square, Triangle)
-- D-pad directions
-- Shoulder buttons and triggers
-- Start, Select, and other standard buttons
+## Analog Sticks and Triggers
 
-### Gamepad Settings
-
-**Added in Bevy 0.3**
-
-The `GamepadSettings` resource allows customization of gamepad behavior on a per-controller, per-axis/button basis:
+Gamepad axes provide analog input values between -1.0 and 1.0:
 
 ```rust
-fn setup_gamepad(mut gamepad_settings: ResMut<GamepadSettings>) {
-    gamepad_settings.axis_settings.insert(
+fn gamepad_movement(
+    gamepads: Res<Gamepads>,
+    axes: Res<Axis<GamepadAxis>>,
+    mut query: Query<&mut Transform, With<Player>>
+) {
+    for gamepad in gamepads.iter() {
+        let left_x = axes
+            .get(GamepadAxis(gamepad, GamepadAxisType::LeftStickX))
+            .unwrap_or(0.0);
+        let left_y = axes
+            .get(GamepadAxis(gamepad, GamepadAxisType::LeftStickY))
+            .unwrap_or(0.0);
+        
+        for mut transform in query.iter_mut() {
+            transform.translation.x += left_x * 5.0;
+            transform.translation.y += left_y * 5.0;
+        }
+    }
+}
+```
+
+Triggers return values from 0.0 (released) to 1.0 (fully pressed).
+
+## Configuring Deadz ones
+
+Analog sticks aren't perfectly centered when released. Deadzones filter out small values to prevent drift:
+
+```rust
+fn setup_gamepad(mut settings: ResMut<GamepadSettings>) {
+    settings.default_axis_settings.set_deadzone_lowerbound(-0.1);
+    settings.default_axis_settings.set_deadzone_upperbound(0.1);
+    
+    // Or configure per-controller, per-axis
+    settings.axis_settings.insert(
         GamepadAxis(Gamepad(0), GamepadAxisType::LeftStickX),
-        AxisSettings {
-            positive_high: 0.8,     // Upper deadzone
-            positive_low: 0.01,     // Lower deadzone
-            ..Default::default()
-        },
+        AxisSettings::new(-0.15, 0.15, -0.9, 0.9),
     );
 }
 ```
 
-This allows you to:
-- Set deadzones for analog sticks
-- Configure trigger sensitivity
-- Customize per-controller settings
-- Fine-tune input response
-
-## Input Iterator Methods
-
-**Added in Bevy 0.2, Enhanced in Bevy 0.6**
-
-New methods on `Input<T>` provide iterator access to input state:
-
-```rust
-fn system(keys: Res<Input<KeyCode>>) {
-    // Iterate over all currently pressed keys
-    for key in keys.get_pressed() {
-        println!("Key pressed: {:?}", key);
-    }
-    
-    // Iterate over keys just pressed this frame
-    for key in keys.get_just_pressed() {
-        println!("Key just pressed: {:?}", key);
-    }
-    
-    // Iterate over keys just released this frame
-    for key in keys.get_just_released() {
-        println!("Key just released: {:?}", key);
-    }
-}
-```
-
-### any_pressed()
-
-**Added in Bevy 0.6**
-
-Check if any of the given inputs are pressed:
-
-```rust
-fn system(input: Res<Input<KeyCode>>) {
-    if input.any_pressed([KeyCode::LShift, KeyCode::RShift]) {
-        println!("At least one shift key is pressed");
-    }
-    
-    if input.any_pressed([KeyCode::W, KeyCode::Up]) {
-        // Move forward
-    }
-}
-```
-
-This is useful for alternate key bindings!
-
-## Input State
-
-The input system automatically tracks three states for each input:
-- **Pressed**: Currently being held down
-- **Just Pressed**: Was pressed this frame
-- **Just Released**: Was released this frame
-
-This makes it easy to handle both continuous input (like movement) and discrete input (like menu navigation).
+Set deadzones based on your game's needs. Racing games might want smaller deadzones for precision, while platformers might use larger ones for reliable movement.
 
 ## Touch Input
 
-**Added in Bevy 0.3**
-
-Bevy supports touch input for mobile and touch-enabled devices:
+Touch input works on mobile devices and touch screens. The `Touches` resource tracks all active touches:
 
 ```rust
-fn touch_system(touches: Res<Touches>) {
-    // Iterate all current touches and retrieve their state
+fn handle_touches(touches: Res<Touches>) {
     for touch in touches.iter() {
-        println!("active touch: {:?}", touch);
-        println!("  position: {}", touch.position());
-        println!("  force: {:?}", touch.force());
-    }
-
-    // Just pressed this frame
-    for touch in touches.iter_just_pressed() {
-        println!("just pressed {:?}", touch);
-    }
-
-    // Just released this frame
-    for touch in touches.iter_just_released() {
-        println!("just released {:?}", touch);
-    }
-
-    // Just cancelled this frame
-    for touch in touches.iter_just_cancelled() {
-        println!("just cancelled {:?}", touch);
+        let position = touch.position();
+        println!("Touch at: {:?}", position);
+        
+        if let Some(force) = touch.force() {
+            println!("Pressure: {}", force);
+        }
     }
 }
 ```
 
-### Touch Properties
-
-Each touch provides:
-- **Position**: Touch location on screen
-- **Force**: Touch pressure (if supported by device)
-- **ID**: Unique identifier for tracking multi-touch
-
-### Raw Touch Events
-
-You can also consume raw touch events:
+Touch input distinguishes between touch lifecycle events:
 
 ```rust
-fn touch_events(mut touch_events: EventReader<TouchInput>) {
-    for event in touch_events.iter() {
-        // Handle raw touch events
-        println!("Touch event: {:?}", event);
+fn touch_events(touches: Res<Touches>) {
+    for touch in touches.iter_just_pressed() {
+        println!("New touch started at {:?}", touch.position());
+    }
+    
+    for touch in touches.iter_just_released() {
+        println!("Touch ended at {:?}", touch.position());
+    }
+    
+    for touch in touches.iter_just_cancelled() {
+        println!("Touch cancelled");
     }
 }
 ```
 
-Touch input enables:
-- Mobile game controls
-- Tablet interfaces
-- Touch-screen displays
-- Multi-touch gestures
+Each touch has a unique ID, enabling multi-touch tracking:
+
+```rust
+fn track_gestures(touches: Res<Touches>, mut state: ResMut<GestureState>) {
+    if touches.iter().count() == 2 {
+        let mut iter = touches.iter();
+        let touch1 = iter.next().unwrap();
+        let touch2 = iter.next().unwrap();
+        
+        let distance = touch1.position().distance(touch2.position());
+        state.pinch_distance = Some(distance);
+    }
+}
+```
+
+## Input Events
+
+For more control, consume raw input events:
+
+```rust
+fn keyboard_events(mut events: EventReader<KeyboardInput>) {
+    for event in events.iter() {
+        println!("Key event: {:?}", event);
+    }
+}
+
+fn mouse_events(mut events: EventReader<MouseButtonInput>) {
+    for event in events.iter() {
+        println!("Mouse event: {:?}", event);
+    }
+}
+```
+
+Events provide lower-level access, useful for implementing text input or custom input systems.
+
+## Cross-Platform Input
+
+The input system abstracts platform differences. The same code handles keyboard on desktop, gamepad on console, and touch on mobile. When porting to new platforms, input code often requires minimal changes.
+
+For maximum compatibility, provide multiple input methods. Support both keyboard and gamepad for desktop games. Include touch controls as an option even on platforms with physical inputs.
+
+## Best Practices
+
+**Use just_pressed for actions** - Button presses, menu selections, and one-time triggers should use `just_pressed` to avoid repeated activation.
+
+**Use pressed for continuous actions** - Movement, aiming, and held actions should use `pressed` to work smoothly while the input is held.
+
+**Support multiple input methods** - Let players choose between keyboard, gamepad, or touch based on preference.
+
+**Configure deadzones appropriately** - Test analog inputs with different controllers to find good deadzone values.
+
+**Provide key rebinding** - Let players customize their controls for accessibility and preference.
+
+Bevy's input system provides everything you need for responsive player controls across all platforms.
 

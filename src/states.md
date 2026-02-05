@@ -1,261 +1,301 @@
 # States
 
-**Added in Bevy 0.4, Redesigned in Bevy 0.5**
+States organize your game into logical modes and control which systems run at any given time.
 
-Bevy States allow you to organize your app into logical states and enable/disable systems according to the current state.
+## Understanding Game States
 
-## Bevy 0.5: States V2
+Games naturally divide into distinct modes: loading screens, menus, gameplay, pause screens. Without states, you'd need complex boolean flags to track mode and manually enable/disable systems. States provide a cleaner abstraction that automatically manages system execution based on the current game mode.
 
-**Changed in Bevy 0.5**
-
-States were completely redesigned with a stack-based state machine model and direct integration with the new scheduler.
+States offer several advantages: systems run only when relevant, reducing unnecessary computation; each mode's logic is clearly separated; cleanup happens automatically when leaving a state; and the stack-based design enables natural patterns like pausing and sub-menus.
 
 ## Defining States
 
-States are defined as normal Rust enums:
+States are Rust enums:
 
 ```rust
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]
-enum AppState {
+enum GameState {
     Loading,
     Menu,
-    InGame,
+    Playing,
     Paused,
 }
 ```
 
-## Adding States to Your App (Bevy 0.5)
+## Setting Up States
 
-**Bevy 0.5:**
+Add a state to your app and configure systems for each state:
+
 ```rust
 fn main() {
-    App::build()
+    App::new()
         .add_plugins(DefaultPlugins)
-        .add_state(AppState::Loading)  // Registers state and driver
+        .add_state(GameState::Loading)
         .add_system_set(
-            SystemSet::on_enter(AppState::Menu)
-                .with_system(setup_menu.system())
+            SystemSet::on_enter(GameState::Menu)
+                .with_system(setup_menu)
         )
         .add_system_set(
-            SystemSet::on_update(AppState::Menu)
-                .with_system(menu_system.system())
+            SystemSet::on_update(GameState::Menu)
+                .with_system(handle_menu_input)
         )
         .add_system_set(
-            SystemSet::on_exit(AppState::Menu)
-                .with_system(cleanup_menu.system())
+            SystemSet::on_exit(GameState::Menu)
+                .with_system(cleanup_menu)
         )
         .run();
 }
 ```
 
-**Changes from 0.4:**
-- `add_state(initial_state)` replaces manual State resource and StateStage setup
-- SystemSets replace on_state_enter/update/exit methods
-- More natural, composable API
-- Direct integration with the scheduler
+## State Lifecycle
 
-## System Sets for States
+Each state has three lifecycle hooks:
 
-Use `SystemSet` to group systems by state lifecycle:
-
+**on_enter** - Runs once when entering the state. Use for setup:
 ```rust
-app
-    // On enter: runs once when entering the state
-    .add_system_set(SystemSet::on_enter(AppState::InGame)
-        .with_system(setup_game.system())
-        .with_system(load_level.system())
-    )
-    // On update: runs every frame while in this state
-    .add_system_set(SystemSet::on_update(AppState::InGame)
-        .with_system(player_movement.system())
-        .with_system(enemy_ai.system())
-    )
-    // On exit: runs once when exiting the state
-    .add_system_set(SystemSet::on_exit(AppState::InGame)
-        .with_system(save_progress.system())
-        .with_system(cleanup.system())
-    );
+fn setup_game(mut commands: Commands, assets: Res<AssetServer>) {
+    commands.spawn_bundle(PlayerBundle::default());
+    commands.spawn_bundle(LevelBundle::from_file("level1.ron"));
+}
 ```
 
-### Lifecycle Events
-
-- **on_enter**: Runs once when first entering a state
-- **on_update**: Runs every frame while in the state
-- **on_exit**: Runs once when exiting a state
-
-## Changing States
-
-Queue a state change from within a system (unchanged from 0.4):
-
+**on_update** - Runs every frame while in the state. Your main game logic:
 ```rust
-fn menu_system(
-    mut state: ResMut<State<AppState>>,
-    keyboard: Res<Input<KeyCode>>
+fn player_movement(
+    mut query: Query<&mut Transform, With<Player>>,
+    input: Res<Input<KeyCode>>
 ) {
-    if keyboard.just_pressed(KeyCode::Return) {
-        state.set(AppState::InGame).unwrap();
+    for mut transform in query.iter_mut() {
+        if input.pressed(KeyCode::W) {
+            transform.translation.y += 5.0;
+        }
     }
 }
 ```
 
-## Stack-Based State Machine
-
-**New in Bevy 0.5**
-
-States now work as a stack, enabling more complex state management:
-
+**on_exit** - Runs once when leaving the state. Use for cleanup:
 ```rust
-// Push a new state onto the stack
-state.push(AppState::Paused).unwrap();
-
-// Pop the current state, returning to the previous one
-state.pop().unwrap();
-
-// Replace the current state
-state.set(AppState::Menu).unwrap();
+fn cleanup_game(mut commands: Commands, query: Query<Entity, With<GameEntity>>) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+}
 ```
 
-This enables patterns like:
-- Pausing (push pause state, then pop to return)
-- Sub-menus (push sub-menu, pop when done)
-- Modal dialogs (push dialog state, pop when closed)
+## Changing States
 
-## State Change Behavior
-
-State changes are queued and applied at the end of the StateStage:
-
-1. **Same-frame execution**: If you change state within a StateStage, lifecycle events occur in the same update/frame
-2. **Multiple changes**: You can change state multiple times, and the system will continue running lifecycle events until no more changes are queued
-3. **Guaranteed execution**: Multiple state changes can be applied within a single frame
-
-This ensures smooth state transitions and predictable behavior.
-
-## Example: Game with Menu
+Change state from within systems:
 
 ```rust
+fn handle_menu_input(
+    mut state: ResMut<State<GameState>>,
+    input: Res<Input<KeyCode>>
+) {
+    if input.just_pressed(KeyCode::Return) {
+        state.set(GameState::Playing).unwrap();
+    }
+}
+```
+
+## Stack-Based States
+
+States operate as a stack, enabling powerful patterns:
+
+**Push** a state onto the stack (keeps previous state):
+```rust
+state.push(GameState::Paused).unwrap();
+```
+
+**Pop** the current state (returns to previous):
+```rust
+state.pop().unwrap();
+```
+
+**Set** replaces the entire stack with a new state:
+```rust
+state.set(GameState::Menu).unwrap();
+```
+
+### Why a Stack?
+
+The stack model enables natural patterns:
+
+**Pause menu:**
+```rust
+// In game
+state.push(GameState::Paused); // Game state preserved underneath
+
+// Unpause
+state.pop(); // Returns to exactly where you were
+```
+
+**Sub-menus:**
+```rust
+// Main menu
+state.push(GameState::OptionsMenu);
+
+// Back button
+state.pop(); // Returns to main menu
+```
+
+**Modal dialogs:**
+```rust
+// During gameplay
+state.push(GameState::ShopDialog);
+
+// Close dialog
+state.pop(); // Back to gameplay
+```
+
+## Complete Example
+
+```rust
+use bevy::prelude::*;
+
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]
 enum GameState {
-    Menu,
+    MainMenu,
     Playing,
     Paused,
 }
 
 fn main() {
-    App::build()
+    App::new()
         .add_plugins(DefaultPlugins)
-        .add_resource(State::new(GameState::Menu))
-        .add_stage_after(stage::UPDATE, "game", StateStage::<GameState>::default())
-        // Menu state
-        .on_state_enter("game", GameState::Menu, setup_menu.system())
-        .on_state_update("game", GameState::Menu, menu_ui.system())
-        .on_state_exit("game", GameState::Menu, cleanup_menu.system())
-        // Playing state
-        .on_state_enter("game", GameState::Playing, setup_level.system())
-        .on_state_update("game", GameState::Playing, player_movement.system())
-        .on_state_update("game", GameState::Playing, enemy_ai.system())
-        .on_state_exit("game", GameState::Playing, save_progress.system())
-        // Paused state
-        .on_state_enter("game", GameState::Paused, show_pause_menu.system())
-        .on_state_update("game", GameState::Paused, pause_menu_input.system())
-        .on_state_exit("game", GameState::Paused, hide_pause_menu.system())
+        .add_state(GameState::MainMenu)
+        // Main menu
+        .add_system_set(
+            SystemSet::on_enter(GameState::MainMenu)
+                .with_system(setup_menu)
+        )
+        .add_system_set(
+            SystemSet::on_update(GameState::MainMenu)
+                .with_system(menu_input)
+        )
+        // Playing
+        .add_system_set(
+            SystemSet::on_enter(GameState::Playing)
+                .with_system(spawn_player)
+                .with_system(spawn_enemies)
+        )
+        .add_system_set(
+            SystemSet::on_update(GameState::Playing)
+                .with_system(player_movement)
+                .with_system(enemy_ai)
+                .with_system(check_pause)
+        )
+        .add_system_set(
+            SystemSet::on_exit(GameState::Playing)
+                .with_system(save_progress)
+        )
+        // Paused
+        .add_system_set(
+            SystemSet::on_enter(GameState::Paused)
+                .with_system(show_pause_menu)
+        )
+        .add_system_set(
+            SystemSet::on_update(GameState::Paused)
+                .with_system(pause_menu_input)
+        )
         .run();
 }
 
-fn menu_ui(mut state: ResMut<State<GameState>>, input: Res<Input<KeyCode>>) {
+fn menu_input(mut state: ResMut<State<GameState>>, input: Res<Input<KeyCode>>) {
     if input.just_pressed(KeyCode::Space) {
-        state.set_next(GameState::Playing).unwrap();
+        state.set(GameState::Playing).unwrap();
     }
 }
 
-fn player_movement(mut state: ResMut<State<GameState>>, input: Res<Input<KeyCode>>) {
+fn check_pause(mut state: ResMut<State<GameState>>, input: Res<Input<KeyCode>>) {
     if input.just_pressed(KeyCode::Escape) {
-        state.set_next(GameState::Paused).unwrap();
+        state.push(GameState::Paused).unwrap();
     }
-    
-    // Player movement logic...
 }
 
 fn pause_menu_input(mut state: ResMut<State<GameState>>, input: Res<Input<KeyCode>>) {
     if input.just_pressed(KeyCode::Escape) {
-        state.set_next(GameState::Playing).unwrap();
+        state.pop().unwrap(); // Return to game
     }
     if input.just_pressed(KeyCode::Q) {
-        state.set_next(GameState::Menu).unwrap();
+        state.set(GameState::MainMenu).unwrap(); // Exit to menu
     }
 }
+
+// Other systems omitted for brevity
 ```
 
-## Common Use Cases
+## Common Patterns
 
 ### Loading Screen
 
 ```rust
-enum GameState {
-    Loading,
-    Ready,
-}
-
 fn check_assets_loaded(
     mut state: ResMut<State<GameState>>,
-    asset_server: Res<AssetServer>,
-    handles: Res<MyAssetHandles>,
+    server: Res<AssetServer>,
+    handles: Res<LoadingAssets>,
 ) {
-    if asset_server.get_load_state(handles.texture) == LoadState::Loaded {
-        state.set_next(GameState::Ready).unwrap();
+    if server.get_group_load_state(handles.0.iter()) == LoadState::Loaded {
+        state.set(GameState::Ready).unwrap();
     }
 }
 ```
 
-### Level Transitions
+### Level Progression
 
 ```rust
-enum GameState {
-    Level1,
-    Level2,
-    Level3,
-}
-
 fn check_level_complete(
     mut state: ResMut<State<GameState>>,
-    player: Query<&Player>,
+    query: Query<&Transform, With<Player>>,
 ) {
-    if player.iter().next().map(|p| p.at_exit()).unwrap_or(false) {
-        state.set_next(GameState::Level2).unwrap();
+    if let Ok(transform) = query.get_single() {
+        if transform.translation.x > 1000.0 {
+            state.set(GameState::NextLevel).unwrap();
+        }
     }
 }
 ```
 
-### Game Over / Win Conditions
+### Game Over Conditions
 
 ```rust
-enum GameState {
-    Playing,
-    GameOver,
-    Victory,
-}
-
-fn check_win_condition(
+fn check_game_over(
     mut state: ResMut<State<GameState>>,
-    enemies: Query<&Enemy>,
-    player: Query<&Player>,
+    player: Query<&Health, With<Player>>,
+    enemies: Query<Entity, With<Enemy>>,
 ) {
-    if enemies.iter().count() == 0 {
-        state.set_next(GameState::Victory).unwrap();
+    // Player died
+    if let Ok(health) = player.get_single() {
+        if health.current <= 0.0 {
+            state.set(GameState::GameOver).unwrap();
+            return;
+        }
     }
     
-    if player.iter().next().map(|p| p.health <= 0).unwrap_or(false) {
-        state.set_next(GameState::GameOver).unwrap();
+    // All enemies defeated
+    if enemies.iter().count() == 0 {
+        state.set(GameState::Victory).unwrap();
     }
 }
 ```
 
-## Benefits
+## State Change Timing
 
-- **Clear organization**: Game logic naturally grouped by state
-- **Automatic cleanup**: on_exit systems handle cleanup automatically
-- **Performance**: Only run systems relevant to current state
-- **Testability**: Each state can be tested independently
-- **Maintainability**: Easy to see what happens in each state
+State changes are queued and applied at stage boundaries. Multiple state changes in a single frame are handled sequentially, with all lifecycle systems executing before the next change.
 
-States are a powerful tool for organizing complex game logic and are commonly used in almost every Bevy game.
+This ensures:
+- Predictable execution order
+- No missed lifecycle events
+- Clean state transitions
+
+## Best Practices
+
+**Use states for major modes** - Menu, gameplay, game over are good candidates. Don't overuse states for minor variations.
+
+**Keep state enums simple** - Avoid deeply nested state logic. Consider separate state types for independent concerns (GameState vs MenuState).
+
+**Clean up on exit** - Always use on_exit systems to despawn entities and free resources.
+
+**Test state transitions** - State changes are common sources of bugs. Test all transitions.
+
+States are fundamental to organizing game logic and are used in virtually every Bevy game.
 

@@ -18,10 +18,10 @@
 # Core Systems
 
 - [Scenes](./scenes.md)
-- [Reflection](./properties.md)
+- [Reflection](./reflection.md)
 - [Events](./events.md)
 - [Assets](./assets.md)
-- [Sound](./sound.md)
+- [Audio](./audio.md)
 - [Input](./input.md)
 - [Task System](./task-system.md)
 - [States](./states.md)

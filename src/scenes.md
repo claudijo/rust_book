@@ -1,104 +1,252 @@
 # Scenes
 
-Scenes are a way to compose pieces of your game/app ahead of time. In Bevy, Scenes are simply a collection of entities and components. A Scene can be "spawned" into a World any number of times. "Spawning" copies the Scene's entities and components into the given World.
+Scenes organize game content into reusable, composable pieces. A scene is a collection of entities and their components that can be spawned into your world multiple times.
 
-Scenes can also be saved to and loaded from "scene files". One of the primary goals of the future "Bevy Editor" will be to make it easy to compose scene files visually.
+## What Scenes Solve
 
-## File Format
+Building complex game worlds entity-by-entity in code becomes tedious. You want to define level layouts, character configurations, and UI structures once and reuse them. Scenes provide this abstraction.
 
-Scene files are saved and loaded as a flat list of entities and components:
+Think of a scene as a template. Define enemies with their components, behaviors, and appearance once. Spawn that enemy scene whenever you need it. Create level sections as scenes and compose larger levels from these pieces.
+
+## Scene Structure
+
+Scenes store entities and components in a serializable format. Load scenes from files or build them programmatically:
+
+```rust
+fn create_enemy_scene(world: &mut World) -> Scene {
+    let mut builder = world.resource::<SceneBuilder>();
+    
+    builder
+        .spawn((
+            Enemy,
+            Health { current: 100.0, max: 100.0 },
+            Transform::from_xyz(0.0, 0.0, 0.0),
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                SpriteBundle {
+                    texture: /* ... */,
+                    ..Default::default()
+                },
+            ));
+        });
+    
+    builder.build()
+}
+```
+
+## Loading Scenes
+
+Load scenes from files like any asset:
+
+```rust
+fn load_level(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let scene = asset_server.load("levels/level_1.scn.ron");
+    commands.spawn(SceneBundle { scene, ..Default::default() });
+}
+```
+
+Bevy spawns the scene's entities into your world automatically when the asset finishes loading.
+
+## Scene Files
+
+Scenes serialize to RON (Rusty Object Notation) format, a human-readable data format:
 
 ```ron
-[
-  (
-    entity: 328997855,
-    components: [
-      {
-        "type": "Position",
-        "map": { "x": 3.0, "y": 4.0 },
+(
+  entities: {
+    0: (
+      components: {
+        "my_game::Position": (
+          x: 100.0,
+          y: 50.0,
+        ),
+        "my_game::Velocity": (
+          x: 10.0,
+          y: 0.0,
+        ),
       },
-    ],
-  ),
-  (
-    entity: 404566393,
-    components: [
-      {
-        "type": "Position",
-        "map": { "x": 1.0, "y": 2.0 },
+    ),
+    1: (
+      components: {
+        "my_game::Position": (
+          x: 200.0,
+          y: 75.0,
+        ),
+        "my_game::Health": (
+          current: 100.0,
+          max: 100.0,
+        ),
       },
-      {
-        "type": "Name",
-        "map": { "value": "Carter" },
-      },
-    ],
-  ),
-]
+    ),
+  },
+)
 ```
 
-The numbers assigned to the entity fields are the entity's id, which are completely optional. If no entity id is provided, one will be randomly generated when the scene is loaded. We have plans to improve this format in the future to be more ergonomic, indent entity hierarchies, and support nested scenes.
+You can edit scene files directly or generate them from your game world.
 
-## Loading and Instancing
+## Spawning Scenes
 
-Scenes can be added to a World using the SceneSpawner resource. Spawning can be done with either `SceneSpawner::load` or `SceneSpawner::instance`.
-
-- **"Loading"** a Scene preserves the entity IDs in it. This is useful for something like a save file where you want entity ids to be constant and changes to be applied on top of entities already in the world.
-- **"Instancing"** adds entities to the World with brand-new IDs, which allows multiple "instances" of a scene to exist in the same World.
+Spawn scenes as entities:
 
 ```rust
-fn load_scene_system(
-    asset_server: Res<AssetServer>,
-    mut scene_spawner: ResMut<SceneSpawner>
-) {
-    // Scenes are loaded just like any other asset.
-    let scene: Handle<Scene> = asset_server.load("my_scene.scn").unwrap();
-    // Spawns the scene with entity ids preserved
-    scene_spawner.load(scene);
-    // Spawns the scene with new entity ids
-    scene_spawner.instance(scene);
-}
-```
-
-## Saving ECS Worlds To Scenes
-
-Any ECS World can be converted to a scene:
-
-```rust
-let scene = Scene::from_world(&world, &component_type_registry);
-```
-
-You can then convert the scene to a RON formatted string:
-
-```rust
-let ron_string = scene.serialize_ron(&property_type_registry)?;
-```
-
-## Hot Scene Reloading
-
-Changes to Scene files can be automatically applied to spawned Scenes at runtime. This allows for immediate feedback without restarts or recompiles.
-
-> **Note**: Scene changes are effectively applied instantaneously.
-
-## How This Works
-
-Scenes are built on top of Bevy's Property and Asset systems. Components can be used in scenes provided they derive the Properties trait. Properties are what enable scene serialization, deserialization, and patching changes at runtime.
-
-## Bevy 0.2 Improvements
-
-### Scene Unloading
-
-**Added in Bevy 0.2**
-
-Methods `unload()` and `unload_sync()` were added on SceneSpawner for unloading scenes:
-
-```rust
-fn system(mut scene_spawner: ResMut<SceneSpawner>, scene_handle: Handle<Scene>) {
-    // Unload a scene asynchronously
-    scene_spawner.unload(scene_handle);
+fn spawn_enemies(mut commands: Commands, enemy_scene: Res<EnemyScene>) {
+    // Spawn the scene
+    commands.spawn(SceneBundle {
+        scene: enemy_scene.handle.clone(),
+        transform: Transform::from_xyz(100.0, 0.0, 0.0),
+        ..Default::default()
+    });
     
-    // Or unload synchronously
-    scene_spawner.unload_sync(scene_handle);
+    // Spawn it again elsewhere
+    commands.spawn(SceneBundle {
+        scene: enemy_scene.handle.clone(),
+        transform: Transform::from_xyz(-100.0, 0.0, 0.0),
+        ..Default::default()
+    });
 }
 ```
 
-This allows for proper cleanup and memory management when scenes are no longer needed.
+Each spawn creates independent entities. Modifying one instance doesn't affect others.
+
+## Creating Scenes from Worlds
+
+Extract parts of your world into a scene:
+
+```rust
+fn save_level(world: &World, type_registry: &TypeRegistry) {
+    // Create scene from world
+    let scene = DynamicScene::from_world(world, type_registry);
+    
+    // Serialize to RON
+    let serialized = scene.serialize_ron(type_registry).unwrap();
+    
+    // Write to file
+    std::fs::write("level.scn.ron", serialized).unwrap();
+}
+```
+
+This captures entities and their components, creating a reusable level template. Useful for saving game state or exporting level designs.
+
+## Filtered Scene Creation
+
+Extract only specific entities:
+
+```rust
+fn save_player_state(
+    world: &World,
+    type_registry: &TypeRegistry,
+    player_query: Query<Entity, With<Player>>
+) {
+    // Only save player entities
+    let entities: Vec<Entity> = player_query.iter().collect();
+    
+    let scene = DynamicSceneBuilder::from_world(world)
+        .extract_entities(entities.into_iter())
+        .build();
+    
+    let serialized = scene.serialize_ron(type_registry).unwrap();
+    std::fs::write("player_save.scn.ron", serialized).unwrap();
+}
+```
+
+This creates focused scenes containing only relevant entities - perfect for save systems.
+
+## Hot Reloading
+
+Scene files support hot reloading during development. Edit a scene file and see changes immediately:
+
+```rust
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_startup_system(load_scene)
+        .run();
+}
+
+fn load_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // Enable asset watching
+    asset_server.watch_for_changes().unwrap();
+    
+    let scene = asset_server.load("test_scene.scn.ron");
+    commands.spawn(SceneBundle { scene, ..Default::default() });
+}
+```
+
+Edit `test_scene.scn.ron` while your game runs. The scene updates automatically without restarting.
+
+## Component Requirements
+
+Components must be serializable to appear in scenes. Derive the necessary traits:
+
+```rust
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+struct Health {
+    current: f32,
+    max: f32,
+}
+```
+
+Register the component with the type registry:
+
+```rust
+app.register_type::<Health>();
+```
+
+Now `Health` can be saved to and loaded from scene files.
+
+## Scene Hierarchies
+
+Scenes preserve parent-child relationships:
+
+```rust
+fn create_character_scene() {
+    commands
+        .spawn((
+            Character,
+            Transform::default(),
+        ))
+        .with_children(|parent| {
+            parent.spawn(SpriteBundle {
+                texture: character_sprite,
+                ..Default::default()
+            });
+            
+            parent.spawn(SpriteBundle {
+                texture: weapon_sprite,
+                transform: Transform::from_xyz(1.0, 0.0, 0.0),
+                ..Default::default()
+            });
+        });
+}
+```
+
+When saved to a scene, the hierarchy remains intact. Loading the scene recreates the complete structure.
+
+## Use Cases
+
+**Level composition** - Build levels from reusable room sections. Each room is a scene. Combine them to create complete levels.
+
+**Enemy templates** - Define enemy types once. Spawn them throughout your game with consistent behavior and appearance.
+
+**Save systems** - Serialize player state and world data. Load it later to resume gameplay.
+
+**Prefabs** - Store complex entity configurations. Spawn them programmatically without rebuilding in code.
+
+**UI layouts** - Define menu structures in scene files. Load different menus based on game state.
+
+## Best Practices
+
+**Keep scenes focused** - Small, specific scenes are easier to manage than large, monolithic ones.
+
+**Use composition** - Build complex scenes from simpler ones rather than creating everything at once.
+
+**Version scene files** - Track scene file changes in version control to collaborate on level design.
+
+**Test scene loading** - Ensure scenes work across different game states and loading orders.
+
+**Handle missing components** - Not all components serialize. Design systems to handle partially loaded scenes gracefully.
+
+Scenes provide a powerful way to organize game content. They enable iteration without recompilation, support team collaboration through file formats, and make complex content manageable through composition.
 
