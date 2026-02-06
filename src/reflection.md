@@ -159,6 +159,69 @@ fn inspect_array(array: &dyn Array) {
 
 The `Array` trait provides dynamic access to array elements regardless of type or size.
 
+## Enum Reflection
+
+Enums are now fully reflectable, providing runtime access to variant information:
+
+```rust
+#[derive(Reflect)]
+enum GameState {
+    MainMenu,
+    Playing(u32),  // level number
+    Paused {
+        elapsed_time: f32,
+        can_resume: bool,
+    },
+}
+```
+
+Access variant information at runtime:
+
+```rust
+let state = GameState::Playing(5);
+
+// Get variant name
+assert_eq!("Playing", state.variant_name());
+
+// Check variant type
+match state.variant_type() {
+    VariantType::Unit => println!("Unit variant"),
+    VariantType::Tuple => println!("Tuple variant"),
+    VariantType::Struct => println!("Struct variant"),
+}
+```
+
+For struct and tuple variants, access fields dynamically:
+
+```rust
+let mut state = GameState::Paused {
+    elapsed_time: 45.5,
+    can_resume: false,
+};
+
+// Access fields by name in struct variants
+*state.field_mut("can_resume").unwrap() = true;
+
+// Iterate over all fields
+for field in state.iter_fields() {
+    println!("Field: {:?}", field);
+}
+```
+
+Type information is available for enums:
+
+```rust
+if let TypeInfo::Enum(info) = GameState::type_info() {
+    // Get variant info
+    if let Some(VariantInfo::Struct(variant)) = info.variant("Paused") {
+        let field = variant.field("elapsed_time").unwrap();
+        assert!(field.is::<f32>());
+    }
+}
+```
+
+Enum reflection integrates with serialization, scenes, and all other reflection features. This enables editors to provide UI for enums, scenes to serialize enum states, and plugins to work with enums generically.
+
 ## Static TypeInfo
 
 Access type metadata before having an instance:
@@ -370,7 +433,76 @@ fn debug_reflected(value: &dyn Reflect) {
 
 The `Debug` implementation for `Reflect` types now shows field names, values, and structure clearly - invaluable for debugging reflection-heavy code and inspecting dynamic values.
 
-## Best Practices
+## Advanced Reflection Features
+
+### Draining Containers
+
+Extract owned values from reflected containers:
+
+```rust
+let container: Box<dyn List> = Box::new(vec![1.0, 2.0, 3.0]);
+let values: Vec<Box<dyn Reflect>> = container.drain();
+// Use owned values without cloning
+```
+
+Draining is more efficient than iterating and cloning when you need owned values.
+
+### Selective Serialization
+
+Skip fields from serialization while keeping them reflectable:
+
+```rust
+#[derive(Reflect)]
+struct PlayerData {
+    name: String,
+    score: i32,
+    #[reflect(skip_serializing)]
+    cached_value: f32,  // Skipped in saves, but still reflectable
+}
+```
+
+Use for computed fields, caches, or sensitive data that shouldn't be serialized.
+
+### Type Conversion
+
+Convert between reflection trait objects:
+
+```rust
+let list: Box<dyn List> = Box::new(vec![1.0, 2.0]);
+let reflect: Box<dyn Reflect> = list.into_reflect();
+```
+
+This enables working with generic reflection APIs after operating on specific container types.
+
+### Array Path Syntax
+
+Access array elements using path strings:
+
+```rust
+#[derive(Reflect)]
+struct Data {
+    values: [i32; 3],
+}
+
+let data = Data { values: [10, 20, 30] };
+assert_eq!(*data.get_path::<i32>("values[1]").unwrap(), 20);
+```
+
+Array indices in paths work just like struct fields, enabling unified path-based access.
+
+### List Pop
+
+Remove and return the last element from reflected lists:
+
+```rust
+let mut list: Box<dyn List> = Box::new(vec![1u8, 2u8, 3u8]);
+let value = list.pop().unwrap();
+assert_eq!(*value.downcast::<u8>().unwrap(), 3u8);
+```
+
+Standard list operations are now available through reflection.
+
+## Limitations
 
 **Register all reflected types** - Call `app.register_type::<T>()` for every type you want to reflect. Missing registrations cause subtle bugs.
 

@@ -44,6 +44,37 @@ fn handle_actions(keyboard: Res<Input<KeyCode>>, mut events: EventWriter<JumpEve
 }
 ```
 
+## Physical vs Logical Keys
+
+Keyboard layouts vary across regions and users. `Input<KeyCode>` uses logical keys that respect the user's keyboard layout. For layout-independent input, use `Input<ScanCode>` which uses physical key positions:
+
+```rust
+fn system(
+    scan_code: Res<Input<ScanCode>>,
+    key_code: Res<Input<KeyCode>>
+) {
+    // Physical key position (same on all keyboards)
+    if scan_code.pressed(ScanCode(33)) {  // Physical F key
+        println!("Physical F key pressed");
+    }
+    
+    // Logical key (respects layout)
+    if key_code.pressed(KeyCode::F) {
+        println!("Logical F key pressed");
+    }
+}
+```
+
+Use `ScanCode` for:
+- Game actions where physical position matters (WASD movement on any keyboard layout)
+- Universal key bindings that work identically everywhere
+- Avoiding layout-dependent behavior
+
+Use `KeyCode` for:
+- Text input or actions where the character matters
+- User-remappable controls that display correctly
+- Standard UI navigation that respects user preferences
+
 ## Alternative Key Bindings
 
 Often you want multiple keys to trigger the same action. The `any_pressed` method checks if any key in a set is pressed:

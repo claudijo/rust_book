@@ -138,6 +138,34 @@ transform.rotate_z(angle);
 
 The anchor affects both positioning and rotation. A sprite anchored at `BottomLeft` rotates around its bottom-left corner.
 
+## Sprite Rects
+
+Select a specific region of a texture to render, without needing a full texture atlas:
+
+```rust
+commands.spawn(SpriteBundle {
+    texture: asset_server.load("spritesheet.png"),
+    sprite: Sprite {
+        rect: Some(Rect {
+            min: Vec2::new(100.0, 0.0),
+            max: Vec2::new(200.0, 100.0),
+        }),
+        ..Default::default()
+    },
+    ..Default::default()
+});
+```
+
+This renders only the specified rectangle from the texture (from pixel 100,0 to 200,100). The rect uses pixel coordinates where (0, 0) is the texture's top-left corner.
+
+Sprite rects are useful for:
+- Simple sprite sheets without defining a full texture atlas
+- Showing different parts of a single image (UI elements, character variants)
+- Cropping sprites dynamically
+- Quick prototyping before creating proper atlases
+
+For complex animations with many frames, use TextureAtlas instead. For simple cases or dynamic selection, sprite rects are lighter weight.
+
 ## Sprite Sheets
 
 Sprite sheets pack multiple images into a single texture. This reduces draw calls and improves performance. Games use sprite sheets for animations, tile sets, and UI elements.

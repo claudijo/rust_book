@@ -84,6 +84,49 @@ fn process_data(
 
 Scopes ensure all spawned tasks finish before continuing, making it safe to access borrowed data from multiple tasks.
 
+### Nested Spawns
+
+Tasks can spawn additional tasks within a scope:
+
+```rust
+fn nested_tasks(pool: Res<ComputeTaskPool>) {
+    let results = pool.scope(|scope| {
+        scope.spawn(async move {
+            // Spawn another task from within this task
+            scope.spawn(async move { 1 });
+            2
+        });
+    });
+    
+    assert!(results.contains(&1));
+    assert!(results.contains(&2));
+}
+```
+
+Nested spawning enables dynamic task creation based on intermediate results. Tasks can branch into subtasks as complexity unfolds, adapting the work structure at runtime.
+
+### Panic Handling
+
+Task pools now catch panics in worker tasks, preventing a single panic from killing worker threads:
+
+```rust
+fn safe_task_execution(pool: Res<ComputeTaskPool>) {
+    pool.scope(|scope| {
+        scope.spawn(async {
+            // If this panics, it won't crash the entire pool
+            risky_operation();
+        });
+        
+        scope.spawn(async {
+            // This task still runs even if the previous one panicked
+            safe_operation();
+        });
+    });
+}
+```
+
+Previously, a panicking task would permanently disable that worker thread. Now panics are contained, logged, and don't affect other tasks or threads. The task pool remains healthy and continues processing work.
+
 ## Efficient Resource Usage
 
 Bevy's task system uses resources proportionally to actual work. Idle threads sleep rather than spinning, reducing CPU usage and power consumption.

@@ -61,6 +61,44 @@ fn main() {
 }
 ```
 
+### Plugin Settings
+
+Configure plugins using the `.set()` method:
+
+```rust
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                width: 1920.0,
+                height: 1080.0,
+                title: "My Game".to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        }))
+        .run();
+}
+```
+
+Plugin settings are specified during initialization and can't be changed after the plugin is added. This distinguishes "initialization settings" from "runtime resources" that can be modified during gameplay.
+
+Chain multiple `.set()` calls to configure different plugins:
+
+```rust
+App::new()
+    .add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin { /* ... */ })
+            .set(AssetPlugin {
+                watch_for_changes: true,
+                ..Default::default()
+            })
+    )
+    .run();
+```
+
+This pattern prevents the confusion of modifying settings that only apply during plugin initialization.
 ### Custom Plugin Groups
 
 Create your own plugin groups to organize game-specific functionality:

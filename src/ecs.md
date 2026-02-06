@@ -648,11 +648,10 @@ fn spawn_enemies(mut commands: Commands) {
 ```rust
 fn system(mut commands: Commands) {
     // Spawn with a bundle
-    let entity = commands.spawn_bundle(EnemyBundle::default()).id();
+    let entity = commands.spawn(EnemyBundle::default()).id();
     
     // Spawn and add components incrementally
-    commands.spawn()
-        .insert_bundle((Position::default(), Velocity::default()))
+    commands.spawn((Position::default(), Velocity::default()))
         .insert(Enemy);
 }
 ```
@@ -738,6 +737,43 @@ commands.entity(parent).despawn();
 ```
 
 The transactional approach guarantees the hierarchy is never in an invalid state. All hierarchy changes happen atomically when commands are applied.
+
+### Hierarchy Query Methods
+
+Navigate hierarchies easily with convenience methods on `Query<&Children>` and `Query<&Parent>`:
+
+```rust
+#[derive(Resource)]
+struct PlayerEntity(Entity);
+
+fn check_descendants(
+    children: Query<&Children>,
+    player: Res<PlayerEntity>
+) {
+    // Iterate all descendants (children, grandchildren, etc.)
+    for entity in children.iter_descendants(player.0) {
+        println!("Found descendant: {:?}", entity);
+    }
+}
+
+fn check_ancestors(
+    parents: Query<&Parent>,
+    player: Res<PlayerEntity>
+) {
+    // Iterate all ancestors (parent, grandparent, etc.)
+    for entity in parents.iter_ancestors(player.0) {
+        println!("Found ancestor: {:?}", entity);
+    }
+}
+```
+
+These methods traverse the entire hierarchy tree automatically. `iter_descendants` performs a depth-first search through all children, grandchildren, and so on. `iter_ancestors` walks up the hierarchy from the entity to the root.
+
+Use these for:
+- Finding all entities beneath a parent (useful for batch operations)
+- Checking if an entity is part of a specific hierarchy branch
+- Propagating changes through a hierarchy
+- Collecting all related entities for processing
 
 ### Resource Initialization
 

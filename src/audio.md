@@ -125,11 +125,15 @@ fn control_music(
         if keyboard.just_pressed(KeyCode::R) {
             sink.play();  // Resume playback
         }
+        
+        if keyboard.just_pressed(KeyCode::Space) {
+            sink.toggle();  // Flip between playing and paused
+        }
     }
 }
 ```
 
-The release notes show `.pause()` and `.play()` methods for controlling playback.
+The `.toggle()` method provides a convenient way to pause/unpause without checking the current state. Perfect for play/pause buttons.
 
 ### Volume Control
 

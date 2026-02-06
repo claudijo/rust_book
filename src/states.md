@@ -54,8 +54,8 @@ Each state has three lifecycle hooks:
 **on_enter** - Runs once when entering the state. Use for setup:
 ```rust
 fn setup_game(mut commands: Commands, assets: Res<AssetServer>) {
-    commands.spawn_bundle(PlayerBundle::default());
-    commands.spawn_bundle(LevelBundle::from_file("level1.ron"));
+    commands.spawn(PlayerBundle::default());
+    commands.spawn(LevelBundle::from_file("level1.ron"));
 }
 ```
 

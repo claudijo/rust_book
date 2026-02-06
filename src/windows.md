@@ -18,24 +18,26 @@ This creates a single window with default settings: 1280x720 resolution, a gener
 
 ## Initial Configuration
 
-Customize the window before it opens using WindowDescriptor:
+Customize the window before it opens using WindowPlugin:
 
 ```rust
 fn main() {
     App::new()
-        .insert_resource(WindowDescriptor {
-            title: "My Game".to_string(),
-            width: 1920.0,
-            height: 1080.0,
-            resizable: true,
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                title: "My Game".to_string(),
+                width: 1920.0,
+                height: 1080.0,
+                resizable: true,
+                ..Default::default()
+            },
             ..Default::default()
-        })
-        .add_plugins(DefaultPlugins)
+        }))
         .run();
 }
 ```
 
-This sets properties before window creation. Some properties can be changed later, others are fixed at creation time.
+Window settings are now configured through the WindowPlugin instead of as a separate resource. Some properties can be changed later, others are fixed at creation time.
 
 ## Accessing Windows
 
@@ -243,12 +245,14 @@ Create windows with transparent backgrounds:
 ```rust
 fn main() {
     App::new()
-        .insert_resource(WindowDescriptor {
-            transparent: true,
-            decorations: false,
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                transparent: true,
+                decorations: false,
+                ..Default::default()
+            },
             ..Default::default()
-        })
-        .add_plugins(DefaultPlugins)
+        }))
         .run();
 }
 ```

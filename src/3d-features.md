@@ -226,6 +226,7 @@ commands.spawn(DirectionalLightBundle {
 });
 ```
 
+Bevy supports up to 10 directional lights simultaneously, enabling complex outdoor lighting with sun, moon, and ambient skylight. Use multiple directional lights for dawn/dusk transitions or multi-sun alien worlds.
 ### Spot Lights
 
 Emit light in a cone:
@@ -572,6 +573,26 @@ fn world_to_screen(
 }
 ```
 
+For the reverse operation, convert screen positions to world-space rays:
+
+```rust
+fn screen_to_ray(
+    cameras: Query<(&Camera, &GlobalTransform)>,
+    cursor_position: Vec2  // Screen coordinates
+) {
+    for (camera, transform) in cameras.iter() {
+        if let Some(ray) = camera.viewport_to_world(transform, cursor_position) {
+            // ray.origin is the camera position
+            // ray.direction is the direction from camera through cursor
+            
+            // Use for 3D picking, raycasting, click-to-place objects
+            println!("Ray origin: {:?}, direction: {:?}", ray.origin, ray.direction);
+        }
+    }
+}
+```
+
+`viewport_to_world` is essential for 3D object picking, click-to-place systems, and any interaction requiring world-space positions from screen coordinates. Combine it with physics raycasting to detect which objects the cursor is over.
 ### RenderLayers
 
 Control which entities each camera renders using RenderLayers:
@@ -776,6 +797,123 @@ fn rotate_objects(time: Res<Time>, mut query: Query<&mut Transform, With<Spinnin
     }
 }
 ```
+
+## Post Processing
+
+Post-processing effects run after the main rendering pass to enhance visual quality. Bevy supports HDR rendering and several post-processing effects.
+
+### HDR Rendering
+
+Enable HDR (High Dynamic Range) rendering to preserve lighting information beyond standard 8-bit color:
+
+```rust
+commands.spawn(Camera3dBundle {
+    camera: Camera {
+        hdr: true,  // Enable HDR rendering
+        ..Default::default()
+    },
+    ..Default::default()
+});
+```
+
+HDR rendering uses more bits per color channel, preserving brightness information that would otherwise be lost. This enables more realistic post-processing effects like bloom.
+
+### Bloom
+
+Bloom creates a glowing effect around bright lights, simulating how cameras and eyes perceive intense light:
+
+```rust
+commands.spawn((
+    Camera3dBundle {
+        camera: Camera {
+            hdr: true,  // Bloom requires HDR
+            ..Default::default()
+        },
+        ..Default::default()
+    },
+    BloomSettings::default(),
+));
+```
+
+Bloom works in both 3D and 2D. Tune the effect with `BloomSettings`:
+
+```rust
+BloomSettings {
+    intensity: 0.15,  // Lower values for subtle effect
+    ..Default::default()
+}
+```
+
+**Warning:** Bloom can be overbearing if misconfigured. Start with low intensity values (0.1-0.3) and adjust to taste. Err on the side of subtlety - excessive bloom looks unrealistic.
+
+### FXAA (Fast Approximate Anti-Aliasing)
+
+FXAA smooths jagged edges with minimal performance cost:
+
+```rust
+commands.spawn((
+    Camera3dBundle::default(),
+    Fxaa::default(),
+));
+```
+
+FXAA is a screen-space anti-aliasing technique that's faster than MSAA but may slightly blur the image. It's a good choice for performance-constrained scenarios.
+
+### Deband Dithering
+
+Deband dithering hides color banding artifacts in gradients:
+
+```rust
+commands.spawn((
+    Camera3dBundle::default(),
+    DebandDither::default(),
+));
+```
+
+Color banding appears as visible steps in smooth gradients due to limited color precision. Dithering adds subtle noise to mask these artifacts, improving perceived image quality.
+
+### Tonemapping
+
+Tonemapping converts HDR colors to displayable LDR (Low Dynamic Range) values. When HDR is enabled, tonemapping runs automatically after post-processing effects:
+
+```rust
+commands.spawn((
+    Camera3dBundle {
+        camera: Camera {
+            hdr: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    },
+    Tonemapping::TonyMcMapface,  // Choose tonemapping algorithm
+));
+```
+
+Different tonemapping algorithms produce different looks. Experiment to find what suits your art style.
+
+### Combining Effects
+
+Stack multiple post-processing effects on a single camera:
+
+```rust
+commands.spawn((
+    Camera3dBundle {
+        camera: Camera {
+            hdr: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    },
+    BloomSettings {
+        intensity: 0.2,
+        ..Default::default()
+    },
+    Fxaa::default(),
+    DebandDither::default(),
+));
+```
+
+Effects apply in a specific order defined by the render graph. HDR effects (like bloom) run before tonemapping, which converts to LDR for display.
 
 ## Performance Tips
 

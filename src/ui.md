@@ -364,20 +364,45 @@ This text exists in 3D space, rotates with the camera, and can be transformed li
 
 ## Z-Index and Layering
 
-UI elements render in a specific order. By default, children render on top of parents, and later siblings render on top of earlier ones. For explicit control, use z-index:
+UI elements render in a specific order. By default, children render on top of parents, and later siblings render on top of earlier ones. This hierarchy-based ordering works for most UIs, but some scenarios need explicit control.
+
+### Z-Index Control
+
+The `ZIndex` component provides two modes for controlling rendering order:
+
+**Local Z-Index** - Orders elements relative to siblings:
 
 ```rust
-commands.spawn(NodeBundle {
-    style: Style {
-        position_type: PositionType::Absolute,
+commands.spawn((
+    NodeBundle {
+        background_color: Color::BLUE.into(),
         ..Default::default()
     },
-    z_index: ZIndex::Global(10),
-    ..Default::default()
-});
+    ZIndex::Local(-1),  // Render behind siblings
+));
 ```
 
-Higher z-index values render on top. Use `ZIndex::Local` for ordering within a container or `ZIndex::Global` for absolute ordering.
+**Global Z-Index** - Orders elements relative to the entire UI root:
+
+```rust
+commands.spawn((
+    NodeBundle {
+        background_color: Color::RED.into(),
+        ..Default::default()
+    },
+    ZIndex::Global(100),  // Render on top of everything
+));
+```
+
+Global z-index lets elements "escape" their parent's ordering and render relative to the entire UI. This is useful for tooltips, modal dialogs, or overlays that need to appear above all other UI.
+
+### Ordering Rules
+
+1. Elements with higher z-index values render on top
+2. Within the same z-level, hierarchy order determines rendering (later children on top)
+3. Global z-index overrides local hierarchy completely
+
+**Example:** If you have nested UI elements where a child needs to render behind its parent, use a negative local z-index. If you need a notification to appear above everything regardless of hierarchy, use a high global z-index.
 
 ## Responsive UI
 
@@ -395,6 +420,27 @@ commands.spawn(NodeBundle {
 ```
 
 Combine fixed and percentage sizing to create UIs that adapt to different screen sizes.
+
+### Global UI Scale
+
+Configure a global scale multiplier for all UI elements using `UiScale`:
+
+```rust
+fn main() {
+    App::new()
+        .insert_resource(UiScale { scale: 2.0 })  // 2x larger UI
+        .add_plugins(DefaultPlugins)
+        .run();
+}
+```
+
+This scales all UI dimensions uniformly, useful for:
+- Accessibility options (larger UI for visibility)
+- High-DPI display adaptation
+- User preference settings
+- Platform-specific scaling (mobile vs desktop)
+
+The scale applies to all pixel values in UI, making it easy to provide user-configurable UI sizing without redesigning layouts.
 
 ## Design Patterns
 

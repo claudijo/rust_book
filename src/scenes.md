@@ -50,40 +50,64 @@ Bevy spawns the scene's entities into your world automatically when the asset fi
 
 ## Scene Files
 
-Scenes serialize to RON (Rusty Object Notation) format, a human-readable data format:
+Scenes serialize to RON (Rusty Object Notation) format, a human-readable data format. The scene format is clean and concise:
 
 ```ron
 (
   entities: {
     0: (
       components: {
-        "my_game::Position": (
-          x: 100.0,
-          y: 50.0,
+        "game::Player": (
+          name: "Alice",
+          position: (
+            x: 0.0,
+            y: 0.0,
+          ),
         ),
-        "my_game::Velocity": (
-          x: 10.0,
-          y: 0.0,
+        "game::Health": (
+          current: 100,
+          max: 100,
         ),
+        "game::Team": A,
       },
     ),
     1: (
       components: {
-        "my_game::Position": (
-          x: 200.0,
-          y: 75.0,
+        "game::Player": (
+          name: "Bob",
+          position: (
+            x: 10.0,
+            y: 0.0,
+          ),
         ),
-        "my_game::Health": (
-          current: 100.0,
-          max: 100.0,
+        "game::Health": (
+          current: 80,
+          max: 100,
         ),
+        "game::Team": B,
       },
     ),
   },
 )
 ```
 
-You can edit scene files directly or generate them from your game world.
+The format is intuitive: entities are stored in a map by ID, and components are listed with their full type paths. Struct fields appear as clean key-value pairs, tuples are parenthesized lists, and enums show their variant names.
+
+### Binary Scene Format
+
+For production builds, use binary scene files (`.scn` extension) for faster loading and smaller file sizes:
+
+```rust
+// Save as binary
+let scene = DynamicScene { /* ... */ };
+let bytes = scene.serialize_binary(&type_registry).unwrap();
+std::fs::write("level.scn", bytes).unwrap();
+
+// Load binary scenes like normal
+let scene = asset_server.load("level.scn");
+```
+
+Binary scenes load significantly faster than text scenes, making them ideal for shipped games. Use text scenes during development for easy editing, then convert to binary for release builds.
 
 ## Spawning Scenes
 
@@ -126,31 +150,46 @@ fn save_level(world: &World, type_registry: &TypeRegistry) {
 }
 ```
 
-This captures entities and their components, creating a reusable level template. Useful for saving game state or exporting level designs.
+## Building Scenes Dynamically
 
-## Filtered Scene Creation
+Create scenes from your running game world using `DynamicSceneBuilder`:
 
-Extract only specific entities:
+```rust
+fn save_game_state(world: &World) -> DynamicScene {
+    DynamicSceneBuilder::from_world(world)
+        .extract_entities(world.iter_entities().map(|e| e.id()))
+        .build()
+}
+```
+
+This captures entities and their components, creating a reusable scene. The builder provides fine-grained control over what gets saved.
+
+## Selective Scene Extraction
+
+Extract only specific entities using queries:
 
 ```rust
 fn save_player_state(
     world: &World,
-    type_registry: &TypeRegistry,
     player_query: Query<Entity, With<Player>>
-) {
-    // Only save player entities
-    let entities: Vec<Entity> = player_query.iter().collect();
-    
-    let scene = DynamicSceneBuilder::from_world(world)
-        .extract_entities(entities.into_iter())
-        .build();
-    
-    let serialized = scene.serialize_ron(type_registry).unwrap();
-    std::fs::write("player_save.scn.ron", serialized).unwrap();
+) -> DynamicScene {
+    // Build scene with only player entities
+    DynamicSceneBuilder::from_world(world)
+        .extract_entities(player_query.iter())
+        .build()
 }
 ```
 
-This creates focused scenes containing only relevant entities - perfect for save systems.
+Or extract individual entities:
+
+```rust
+let mut builder = DynamicSceneBuilder::from_world(world);
+builder.extract_entity(player_entity);
+builder.extract_entity(companion_entity);
+let scene = builder.build();
+```
+
+This focused extraction is perfect for save systems, prefab creation, or exporting specific game objects. Extract only what you need, keeping scenes small and fast to load.
 
 ## Hot Reloading
 

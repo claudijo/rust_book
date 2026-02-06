@@ -65,12 +65,12 @@ fn start_walking(
     mut players: Query<&mut AnimationPlayer>
 ) {
     for mut player in players.iter_mut() {
-        player.play(animations.walk.clone());
+        player.start(animations.walk.clone());
     }
 }
 ```
 
-The animation begins immediately and plays once by default.
+The animation begins immediately and plays once by default. Use `start()` to begin or restart an animation.
 
 ## Looping
 
@@ -82,7 +82,7 @@ fn start_idle_animation(
     mut players: Query<&mut AnimationPlayer>
 ) {
     for mut player in players.iter_mut() {
-        player.play(animations.idle.clone()).repeat();
+        player.start(animations.idle.clone()).repeat();
     }
 }
 ```
@@ -94,14 +94,17 @@ Looping animations work perfectly for idle states, walking, running, or any cycl
 The release notes mention that animations can be "paused, scrubbed, looped, reversed, and speed controlled" using AnimationPlayer. The specific control API includes:
 
 ```rust
-// Play an animation
-player.play(animation_handle.clone());
+// Start/restart an animation
+player.start(animation_handle.clone());
 
 // Loop an animation
+player.start(animation_handle.clone()).repeat();
+
+// Play without overwriting (0.9 behavior)
 player.play(animation_handle.clone()).repeat();
 ```
 
-Additional control methods (pause, resume, seek, speed) are mentioned in the release notes but specific API details aren't shown. Consult the Bevy API documentation for complete AnimationPlayer methods.
+Use `start()` to begin or restart an animation. Use `play()` if you don't want to interrupt an already-playing animation. Additional control methods (pause, resume, seek, speed) are available - consult the Bevy API documentation for complete AnimationPlayer methods.
 
 ## Loading Animations from GLTF
 
@@ -135,7 +138,7 @@ fn play_on_spawn(
     mut players: Query<&mut AnimationPlayer, Added<AnimationPlayer>>
 ) {
     for mut player in players.iter_mut() {
-        player.play(animations.walk.clone()).repeat();
+        player.start(animations.walk.clone()).repeat();
     }
 }
 ```
@@ -171,7 +174,7 @@ fn update_character_animation(
             CharacterState::Jumping => &animations.jump,
         };
         
-        player.play(animation.clone()).repeat();
+        player.start(animation.clone()).repeat();
     }
 }
 ```
