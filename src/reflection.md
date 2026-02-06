@@ -115,6 +115,104 @@ fn modify_player(player: &mut dyn Reflect) {
 
 This patches values onto existing types, updating only the fields present in the dynamic value.
 
+## Default Trait Reflection
+
+Construct reflected types using their `Default` implementation:
+
+```rust
+#[derive(Reflect, Default)]
+#[reflect(Default)]
+struct GameConfig {
+    difficulty: String,
+    volume: f32,
+}
+
+fn create_default_config(registry: &TypeRegistry) -> Box<dyn Reflect> {
+    let registration = registry.get(TypeId::of::<GameConfig>()).unwrap();
+    let reflect_default = registration.data::<ReflectDefault>().unwrap();
+    
+    // Creates a GameConfig with default values
+    reflect_default.default()
+}
+```
+
+This enables constructing components and structs without compile-time type information - crucial for scripting, scenes, and dynamic entity spawning. Register the `Default` trait with `#[reflect(Default)]` to enable this feature.
+
+## Array Reflection
+
+Arrays are now reflectable, enabling type-erased array operations:
+
+```rust
+#[derive(Reflect)]
+struct PlayerStats {
+    damage_types: [f32; 4],  // Now reflectable!
+}
+
+fn inspect_array(array: &dyn Array) {
+    println!("Array length: {}", array.len());
+    for i in 0..array.len() {
+        let element = array.get(i).unwrap();
+        println!("Element {}: {:?}", i, element);
+    }
+}
+```
+
+The `Array` trait provides dynamic access to array elements regardless of type or size.
+
+## Static TypeInfo
+
+Access type metadata before having an instance:
+
+```rust
+#[derive(Reflect)]
+struct Enemy {
+    health: f32,
+    damage: u32,
+}
+
+fn analyze_type() {
+    // Get type info without an instance
+    let info = Enemy::type_info();
+    
+    if let TypeInfo::Struct(info) = info {
+        assert!(info.is::<Enemy>());
+        assert_eq!(info.type_name(), std::any::type_name::<Enemy>());
+        
+        // Inspect fields
+        assert!(info.field("health").unwrap().is::<f32>());
+        assert!(info.field_at(1).unwrap().is::<u32>());
+    }
+}
+```
+
+`type_info()` returns `&'static TypeInfo` - it lazily allocates metadata the first time requested, then reuses it. This enables building deserializers, validators, and tools that need type information before instantiation.
+
+Generic types also support `TypeInfo`, with type parameters included in the metadata.
+
+## Resource Reflection
+
+ECS resources can be reflected for dynamic access:
+
+```rust
+#[derive(Resource, Reflect)]
+#[reflect(Resource)]
+struct Scoreboard {
+    points: usize,
+}
+
+fn access_resource_dynamically(world: &World, registry: &TypeRegistry) {
+    let registration = registry.get(TypeId::of::<Scoreboard>()).unwrap();
+    let reflect_resource = registration.data::<ReflectResource>().unwrap();
+    
+    // Type-erased resource access
+    if let Some(resource) = reflect_resource.reflect(world) {
+        println!("Resource: {:?}", resource);
+    }
+}
+```
+
+Register resources with `#[reflect(Resource)]` to enable dynamic reading and writing through the reflection system. This powers scripting systems that need to access resources without knowing their types at compile time.
+
 ## Serialization
 
 Reflection enables generic serialization without manual Serde implementations:
@@ -259,6 +357,18 @@ Reflection has costs and constraints:
 **Requires registration** - Types need explicit registration for full functionality. Forgetting to register a type causes runtime errors.
 
 **Reflection bounds** - Generic types require their type parameters to implement `Reflect`, which can be limiting.
+
+## Debug Formatting
+
+Reflected values now provide useful debug output:
+
+```rust
+fn debug_reflected(value: &dyn Reflect) {
+    println!("{:?}", value);  // Pretty, readable output
+}
+```
+
+The `Debug` implementation for `Reflect` types now shows field names, values, and structure clearly - invaluable for debugging reflection-heavy code and inspecting dynamic values.
 
 ## Best Practices
 

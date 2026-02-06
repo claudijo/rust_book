@@ -199,6 +199,26 @@ fn system(query: Query<(&Position, &Velocity)>) {
 }
 ```
 
+### Ergonomic Iteration Syntax
+
+Queries implement `IntoIterator`, enabling cleaner iteration syntax:
+
+```rust
+fn system(mut players: Query<&mut Player>) {
+    // Instead of players.iter()
+    for player in &players {
+        println!("Player: {}", player.name);
+    }
+    
+    // Instead of players.iter_mut()
+    for mut player in &mut players {
+        player.score += 1;
+    }
+}
+```
+
+Use `&query` for read-only iteration and `&mut query` for mutable iteration. Both approaches work - choose whichever feels more natural for your code.
+
 You can iterate immutably even with mutable access:
 
 ```rust
@@ -471,6 +491,71 @@ if let Ok([a, b, c]) = query.get_many_mut([entity_a, entity_b, entity_c]) {
 
 Immutable variants exist too: `many()` and `get_many()`.
 
+### Iterating Over Entity Lists
+
+When you have a dynamic list of entities, use `iter_many`:
+
+```rust
+#[derive(Component)]
+struct Team {
+    members: Vec<Entity>,
+}
+
+fn announce_team(
+    blue_team: Query<&Team>,
+    players: Query<&Player>
+) {
+    for team in &blue_team {
+        println!("Team roster:");
+        for player in players.iter_many(&team.members) {
+            println!("  - {}", player.name);
+        }
+    }
+}
+```
+
+For mutable iteration over entity lists, use `iter_many_mut`. Since it must prevent aliased mutability, it doesn't implement `Iterator`:
+
+```rust
+fn update_team_scores(
+    blue_team: Query<&Team>,
+    mut players: Query<&mut Player>
+) {
+    for team in &blue_team {
+        let mut iter = players.iter_many_mut(&team.members);
+        while let Some(mut player) = iter.fetch_next() {
+            player.score += 10;
+        }
+    }
+}
+```
+
+The `fetch_next()` pattern ensures safe mutable access even when iterating over arbitrary entity lists.
+
+### Converting Queries to Read-Only
+
+Mutable queries can be converted to read-only versions, useful for building abstractions:
+
+```rust
+fn update_and_log(mut players: Query<&mut Player>) {
+    // Mutate players
+    for mut player in &mut players {
+        player.score += 1;
+    }
+    
+    // Convert to read-only for logging
+    log_players(players.to_readonly());
+}
+
+fn log_players(players: Query<&Player>) {
+    for player in &players {
+        println!("Player {} has {} points", player.name, player.score);
+    }
+}
+```
+
+This enables passing mutable queries to functions expecting read-only queries, making code more reusable. Once converted to read-only, you can't convert back - the change is one-way.
+
 ### Conflicting Queries
 
 If you need overlapping mutable access, use ParamSet:
@@ -603,13 +688,56 @@ fn cleanup(mut commands: Commands, query: Query<Entity, With<Despawning>>) {
 
 ### Hierarchy Commands
 
+Entity hierarchies use two components: `Parent` (points to parent entity) and `Children` (points to child entities). This separation makes it easy to query hierarchy roots:
+
 ```rust
-// Despawn an entity and all its descendants
+fn find_roots(roots: Query<Entity, Without<Parent>>) {
+    // Entities without parents are hierarchy roots
+}
+```
+
+Hierarchy changes must be done transactionally through Commands to maintain consistency. Direct modification of `Parent` and `Children` components is not allowed - this ensures the hierarchy is always correct.
+
+Build hierarchies with `with_children`:
+
+```rust
+commands
+    .spawn(SpatialBundle::default())
+    .with_children(|parent| {
+        parent.spawn(SpriteBundle {
+            texture: player_texture,
+            ..Default::default()
+        });
+        parent.spawn(SpriteBundle {
+            texture: hat_texture,
+            ..Default::default()
+        });
+    });
+```
+
+Manipulate existing hierarchies:
+
+```rust
+// Add children to an existing entity
+commands.entity(parent)
+    .with_children(|parent| {
+        parent.spawn(ChildBundle::default());
+    });
+
+// Add specific entity as child
+commands.entity(parent).add_child(child_entity);
+
+// Remove children
+commands.entity(parent).remove_children(&[child1, child2]);
+
+// Despawn entity and all descendants
 commands.entity(parent).despawn_descendants();
 
-// Remove specific children
-commands.entity(parent).remove_children(&[child1, child2]);
+// Despawn entity, keep children (orphan them)
+commands.entity(parent).despawn();
 ```
+
+The transactional approach guarantees the hierarchy is never in an invalid state. All hierarchy changes happen atomically when commands are applied.
 
 ### Resource Initialization
 

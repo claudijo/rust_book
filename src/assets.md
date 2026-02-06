@@ -351,6 +351,37 @@ basisu -mipmap -ktx2 input.png -output_file output.ktx2
 
 This creates a compressed KTX2 file with mipmaps from a PNG source.
 
+### Texture Filtering
+
+Bevy defaults to linear texture filtering, which produces smooth results by interpolating between texture pixels. This works well for most textures and provides better visual quality than nearest-neighbor filtering.
+
+If you need pixel-perfect rendering (like pixel art games), configure nearest filtering:
+
+```rust
+fn main() {
+    App::new()
+        .insert_resource(ImageSettings::default_nearest())
+        .add_plugins(DefaultPlugins)
+        .run();
+}
+```
+
+You can also set filtering per-texture:
+
+```rust
+fn setup_texture(mut images: ResMut<Assets<Image>>, handle: Handle<Image>) {
+    if let Some(image) = images.get_mut(&handle) {
+        image.sampler_descriptor = ImageSampler::Descriptor(SamplerDescriptor {
+            mag_filter: FilterMode::Nearest,
+            min_filter: FilterMode::Nearest,
+            ..Default::default()
+        });
+    }
+}
+```
+
+Linear filtering is generally preferred as it produces smoother visuals, especially with mipmaps.
+
 ### When to Use Compression
 
 **Large scenes** - Many textures benefit greatly from compression.

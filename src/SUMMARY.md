@@ -32,6 +32,7 @@
 
 - [The New Renderer](./new-renderer.md)
 - [Physically Based Rendering](./pbr.md)
+- [Materials and Custom Shaders](./materials.md)
 - [Render Graph](./render-graph.md)
 
 # Platforms

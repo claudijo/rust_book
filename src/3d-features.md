@@ -28,12 +28,19 @@ This spawns a cube at position (0, 0.5, 0) with a tan color.
 Meshes define 3D shapes through vertices and triangles. Bevy includes common primitives:
 
 ```rust
-// Basic shapes
+// Basic 3D shapes
 let cube = Mesh::from(shape::Cube { size: 1.0 });
 let sphere = Mesh::from(shape::UVSphere { radius: 0.5, ..Default::default() });
 let plane = Mesh::from(shape::Plane { size: 10.0 });
 let cylinder = Mesh::from(shape::Cylinder { radius: 0.5, height: 2.0, ..Default::default() });
+
+// 2D shapes (useful for sprites and UI)
+let circle = Mesh::from(shape::Circle::new(10.0));
+let pentagon = Mesh::from(shape::RegularPolygon::new(10.0, 5));
+let hexagon = Mesh::from(shape::RegularPolygon::new(10.0, 6));
 ```
+
+Regular polygons create n-sided shapes with a specified radius and number of sides. Use these with `ColorMesh2dBundle` for 2D shapes or with standard materials for 3D.
 
 Add these to the mesh assets collection to use them:
 
@@ -93,7 +100,7 @@ This flexibility means:
 **Custom attributes supported** - Add vertex colors, bone weights, tangents, or any per-vertex data:
 
 ```rust
-// Add vertex colors
+// Add vertex colors - fully supported by StandardMaterial and ColorMaterial
 mesh.insert_attribute(
     Mesh::ATTRIBUTE_COLOR,
     vec![[1.0, 0.0, 0.0, 1.0]; vertex_count]  // RGBA
@@ -105,6 +112,10 @@ mesh.insert_attribute(
     vec![0.5f32; vertex_count]
 );
 ```
+
+Vertex colors are particularly useful for procedural meshes, terrain, particle effects, or any scenario where you want per-vertex variation without textures. Both 2D and 3D materials automatically use vertex colors when present.
+
+**Automatic tangent generation** - If a mesh has normal maps but lacks tangent data, Bevy automatically generates tangents using the industry-standard MikkTSpace algorithm. This ensures normal maps work correctly even on meshes that don't provide tangents.
 
 **Shaders specialize automatically** - Bevy compiles shader variants based on mesh vertex layouts. A shader using vertex colors only compiles that path when rendering meshes with colors.
 
@@ -311,6 +322,33 @@ fn toggle_lights(
 }
 ```
 
+### Visibility Inheritance
+
+Visibility now propagates down entity hierarchies, similar to Transform. When you hide a parent entity, all its descendants automatically hide as well. This is invaluable for complex entities with many nested parts.
+
+Consider a player entity with nested components: character mesh, equipment, weapons, and visual effects. Hiding the top-level player entity now automatically hides everything beneath it - no need to manually hide each piece.
+
+To set visibility:
+
+```rust
+// Hide an entity and all its children
+entity_visibility.is_visible = false;
+```
+
+To check if something is actually visible (considering parent visibility), use `ComputedVisibility`:
+
+```rust
+fn check_visibility(query: Query<&ComputedVisibility>) {
+    for visibility in query.iter() {
+        if visibility.is_visible() {
+            // This entity is visible, considering parent visibility
+        }
+    }
+}
+```
+
+Use `Visibility` to control an entity's visibility. Use `ComputedVisibility` to check the final visibility state after hierarchy propagation.
+
 Invisible lights don't contribute to rendering, saving GPU time. Use this for day/night cycles, power-off states, or performance optimization.
 
 ## Cameras
@@ -359,16 +397,20 @@ commands.spawn(Camera3dBundle {
 
 Orthographic is useful for strategy games, editors, or artistic styles.
 
+### Camera-Driven Rendering
+
+Each camera controls what it renders, how it renders, and where it renders to. Cameras run their own render graph to a specified render target (window or texture). This makes advanced rendering scenarios simple.
+
 ### Render To Texture
 
-Cameras can render to textures instead of windows, enabling mirrors, split-screen, portals, and 2D UI in 3D space:
+Rendering a camera to a texture is now a single field assignment:
 
 ```rust
-fn setup_render_texture(
+fn setup_portal_camera(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
 ) {
-    // Create a texture to render into
+    // Create target texture
     let size = Extent3d {
         width: 512,
         height: 512,
@@ -391,7 +433,7 @@ fn setup_render_texture(
     
     let image_handle = images.add(image);
     
-    // Camera renders to this texture
+    // Camera renders to texture
     commands.spawn(Camera3dBundle {
         camera: Camera {
             target: RenderTarget::Image(image_handle.clone()),
@@ -402,7 +444,186 @@ fn setup_render_texture(
 }
 ```
 
-The current implementation is low-level, often requiring custom render graph nodes. Future versions will provide higher-level APIs for common render-to-texture scenarios. See the `render_to_texture` example for complete implementation details.
+Use this for portals, security cameras, minimaps, UI textures in 3D space, player portraits, or any scenario where you need to render from another perspective.
+
+### Split Screen
+
+Create split-screen rendering by setting viewports on multiple cameras:
+
+```rust
+fn setup_split_screen(mut commands: Commands) {
+    // Left camera - renders to left half
+    commands.spawn(Camera3dBundle {
+        camera: Camera {
+            viewport: Some(Viewport {
+                physical_position: UVec2::new(0, 0),
+                physical_size: UVec2::new(960, 1080),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        transform: Transform::from_xyz(-5.0, 5.0, 5.0)
+            .looking_at(Vec3::ZERO, Vec3::Y),
+        ..Default::default()
+    });
+    
+    // Right camera - renders to right half
+    commands.spawn(Camera3dBundle {
+        camera: Camera {
+            viewport: Some(Viewport {
+                physical_position: UVec2::new(960, 0),
+                physical_size: UVec2::new(960, 1080),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        transform: Transform::from_xyz(5.0, 5.0, 5.0)
+            .looking_at(Vec3::ZERO, Vec3::Y),
+        ..Default::default()
+    });
+}
+```
+
+The viewport defines which section of the render target each camera draws to. Perfect for local multiplayer or picture-in-picture effects.
+
+### Camera Layering and Priority
+
+Layer cameras on top of each other using the priority field:
+
+```rust
+fn setup_layered_cameras(mut commands: Commands) {
+    // Base camera - renders first
+    commands.spawn(Camera3dBundle {
+        camera: Camera {
+            priority: 0,  // Lower priority renders first
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    
+    // Overlay camera - renders on top
+    commands.spawn(Camera3dBundle {
+        camera_3d: Camera3d {
+            // Don't clear - preserve base camera's render
+            clear_color: ClearColorConfig::None,
+            ..Default::default()
+        },
+        camera: Camera {
+            priority: 1,  // Higher priority renders last
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+}
+```
+
+Higher priority cameras render after lower priority cameras. Use `ClearColorConfig::None` to preserve previous renders and layer on top. This enables custom UI passes, minimaps overlaid on the main view, or multi-pass rendering effects.
+
+### Enabling and Disabling Cameras
+
+Control whether a camera renders using the `is_active` field:
+
+```rust
+fn toggle_camera(
+    keyboard: Res<Input<KeyCode>>,
+    mut cameras: Query<&mut Camera>
+) {
+    if keyboard.just_pressed(KeyCode::C) {
+        for mut camera in cameras.iter_mut() {
+            camera.is_active = !camera.is_active;
+        }
+    }
+}
+```
+
+Inactive cameras don't render, saving GPU time. Use this for toggling between different views or temporarily disabling rendering.
+
+### Camera Target Size
+
+Cameras store their render target size locally for easy access:
+
+```rust
+fn use_camera_size(cameras: Query<&Camera>) {
+    for camera in cameras.iter() {
+        if let Some(size) = camera.logical_target_size() {
+            println!("Camera renders to {}x{}", size.x, size.y);
+        }
+        
+        if let Some(viewport_size) = camera.logical_viewport_size() {
+            println!("Viewport size: {}x{}", viewport_size.x, viewport_size.y);
+        }
+    }
+}
+```
+
+World-to-screen conversion is also simpler:
+
+```rust
+fn world_to_screen(
+    cameras: Query<(&Camera, &GlobalTransform)>
+) {
+    for (camera, transform) in cameras.iter() {
+        let world_pos = Vec3::new(0.0, 1.0, 0.0);
+        
+        if let Some(screen_pos) = camera.world_to_viewport(transform, world_pos) {
+            println!("World position projects to screen: {:?}", screen_pos);
+        }
+    }
+}
+```
+
+### RenderLayers
+
+Control which entities each camera renders using RenderLayers:
+
+```rust
+fn setup_layered_rendering(mut commands: Commands) {
+    // Camera only sees layer 0
+    commands.spawn(Camera3dBundle {
+        camera: Camera {
+            target: RenderTarget::Image(texture_handle),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .insert(RenderLayers::layer(0));
+    
+    // Main camera sees layer 1
+    commands.spawn(Camera3dBundle::default())
+        .insert(RenderLayers::layer(1));
+    
+    // Entity on layer 0 - only rendered by first camera
+    commands.spawn(PbrBundle {
+        mesh: mesh_handle,
+        material: material_handle,
+        ..Default::default()
+    })
+    .insert(RenderLayers::layer(0));
+    
+    // Entity on layer 1 - only rendered by main camera
+    commands.spawn(PbrBundle {
+        mesh: mesh_handle,
+        material: material_handle,
+        ..Default::default()
+    })
+    .insert(RenderLayers::layer(1));
+}
+```
+
+Entities without RenderLayers render on all cameras. Entities with RenderLayers only render on cameras with matching layers. Use this to render different sets of objects to different cameras, perfect for portals, minimaps, or hiding UI from screenshots.
+
+### Custom Render Graphs (Advanced)
+
+For specialized rendering needs, cameras can use custom render graphs instead of the default 2D or 3D graphs:
+
+```rust
+commands.spawn(Camera3dBundle {
+    camera_render_graph: CameraRenderGraph::new(some_custom_graph),
+    ..Default::default()
+});
+```
+
+This enables completely custom rendering pipelines, like replacing forward rendering with deferred rendering. Most scenarios don't need this - high-level Materials and extending the built-in render graphs cover common cases. Using the default render graph ensures compatibility with other plugins.
 
 ## Compute Shaders
 
@@ -560,7 +781,7 @@ fn rotate_objects(time: Res<Time>, mut query: Query<&mut Transform, With<Spinnin
 
 **Use LOD (Level of Detail)** - Simpler meshes for distant objects.
 
-**Frustum culling** - Bevy automatically skips rendering objects outside the camera's view.
+**Frustum culling** - Bevy automatically skips rendering objects outside the camera's view. Frustum culling now runs in parallel across multiple CPU cores, significantly improving performance in scenes with many entities.
 
 **Batch by material** - Objects sharing materials render together efficiently.
 

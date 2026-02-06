@@ -139,11 +139,11 @@ fn gamepad_input(
     mut query: Query<&mut Transform, With<Player>>
 ) {
     for gamepad in gamepads.iter() {
-        if button_inputs.just_pressed(GamepadButton(gamepad, GamepadButtonType::South)) {
+        if button_inputs.just_pressed(GamepadButton::new(gamepad, GamepadButtonType::South)) {
             println!("Player {} pressed A/Cross", gamepad.id);
         }
         
-        if button_inputs.pressed(GamepadButton(gamepad, GamepadButtonType::West)) {
+        if button_inputs.pressed(GamepadButton::new(gamepad, GamepadButtonType::West)) {
             println!("Player {} holding X/Square", gamepad.id);
         }
     }
@@ -168,10 +168,10 @@ fn gamepad_movement(
 ) {
     for gamepad in gamepads.iter() {
         let left_x = axes
-            .get(GamepadAxis(gamepad, GamepadAxisType::LeftStickX))
+            .get(GamepadAxis::new(gamepad, GamepadAxisType::LeftStickX))
             .unwrap_or(0.0);
         let left_y = axes
-            .get(GamepadAxis(gamepad, GamepadAxisType::LeftStickY))
+            .get(GamepadAxis::new(gamepad, GamepadAxisType::LeftStickY))
             .unwrap_or(0.0);
         
         for mut transform in query.iter_mut() {
@@ -195,7 +195,7 @@ fn setup_gamepad(mut settings: ResMut<GamepadSettings>) {
     
     // Or configure per-controller, per-axis
     settings.axis_settings.insert(
-        GamepadAxis(Gamepad(0), GamepadAxisType::LeftStickX),
+        GamepadAxis::new(Gamepad::new(0), GamepadAxisType::LeftStickX),
         AxisSettings::new(-0.15, 0.15, -0.9, 0.9),
     );
 }
