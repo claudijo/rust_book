@@ -21,13 +21,3 @@ Your feedback helps improve the book for everyone!
 If you find this book valuable, consider supporting the Bevy Foundation directly. All donations help fund Bevy's continued development:
 
 [https://bevy.org/donate/](https://bevy.org/donate/)
-
-### License
-
-Copyright © 2026 Claudijo Borovic
-
-This book is licensed under the [MIT License](https://opensource.org/licenses/MIT).
-
-You are free to use, copy, modify, and distribute this work, including for commercial purposes, as long as you include the copyright notice and license text.
-
-
